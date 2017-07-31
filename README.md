@@ -1,12 +1,12 @@
 # dt (beta)
 
 PHP extension for DateTime.
-###Features
+### Features
 - Create objects from strings, float/int timestamps or object
 - German and English for input and output
 - Supports microseconds
 
-###Usage
+### Usage
 
 ```php
 require '/yourpath/class.dt.php';
@@ -21,7 +21,7 @@ dt::setDefaultLanguage('de');  //German
 $dateOfBirth = dt::create('16.3.1975');
 echo 'Ich bin an einem '.$dateOfBirth->formatL('l')
   .' im '.$dateOfBirth->formatL('F').' geboren.';
-//Ich bin an einem Sonntag im MÃ¤rz geboren.
+//Ich bin an einem Sonntag im März geboren.
 
 //diffTotal: units Week, Day, Hour, Minute, Second, Year, Month
 $myAge = $dateOfBirth->diffTotal('today','Years');
@@ -52,6 +52,6 @@ $cronStart = $dateTime->isCron($cronStr);  //true
 $nextStart = $dateTime->nextCron($cronStr);  //2017-07-28 01:20:00
 ```
 
-###Requirements
+### Requirements
 
 - PHP 5.3.8+
