@@ -55,3 +55,4 @@ $nextStart = $dateTime->nextCron($cronStr);  //2017-07-28 01:20:00
 ### Requirements
 
 - PHP 5.3.8+
+- Class phpcheck.php is required to run phpcheck.class.dt.php
