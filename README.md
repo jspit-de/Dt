@@ -55,5 +55,5 @@ $nextStart = $dateTime->nextCron($cronStr);  //2017-07-28 01:20:00
 ### Requirements
 
 - PHP 5.3.8+
-- Class [phpcheck.php](https://github.com/jspit-de/phpcheck) is required to run phpcheck.class.dt.php (https://github.com/jspit-de/phpcheck)
+- Class [phpcheck.php](https://github.com/jspit-de/phpcheck) is required to run phpcheck.class.dt.php
 
