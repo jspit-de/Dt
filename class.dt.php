@@ -2,9 +2,9 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.4.15                                                         |
-|      Date: 2017-07-31                                                     |
-|       PHP: 5.3.8+                                                    |
+|   Version: 1.4.16                                                         |
+|      Date: 2017-08-07                                                     |
+|       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..16, Peter Junk (alias jspit). All Rights Reserved.      |
 ' ------------------------------------------------------------------------- '
@@ -1031,7 +1031,7 @@ class dt extends DateTime{
   public function isCron($cronStr){
     $currArr = explode(' ',$this->format('i H d m w'));
     $cronArr = preg_split('/\s+/',$cronStr); 
-    //Array(Second, Minute,Hour, Day, Month, Weekday)
+    //Array(Minute,Hour, Day, Month, Weekday)
     $ret = NULL;
     if(count($cronArr) == 5) {
       foreach($cronArr as $i => $cronEntry){
@@ -1228,20 +1228,33 @@ class dt extends DateTime{
     if(ctype_digit($cronEntry)){
       return (bool)((int)$cronEntry == $curr); 
     }
-    //list 3,4,5
-    $numberList = explode(',',$cronEntry);
-    if(count($numberList) >= 2) {
-      return in_array($curr,$numberList) ;
+    if(strpos($cronEntry,',')) {
+      //list 3,4,5
+      if(!preg_match('~^[0-9]+(,[0-9]+)+$~',$cronEntry)) return null;
+      return in_array($curr,explode(',',$cronEntry)) ;
     }
-    //list 1-5
-    $numberList = explode('-',$cronEntry);
-    if(count($numberList) == 2) {
+
+    if(strpos($cronEntry,'/')) {
+      // */i or n-m/i
+      if(preg_match('~^\*/(\d{1,2})$~',$cronEntry,$match)) {
+        return ($curr%($match[1]) == 0);
+      }
+      elseif(preg_match('~^(\d+)-(\d+)/(\d+)$~',$cronEntry,$match)) {
+        $n = $match[1];
+        if($curr < $n OR $curr > $match[2]) return false;
+        $curr -= $n;
+        return ($curr%($match[3]) == 0);
+      }
+      else return null;
+    }
+    elseif(strpos($cronEntry,'-')){
+      //list n-m
+      if(!preg_match('~^[0-9]+-[0-9]+$~',$cronEntry)) return null;
+      $numberList = explode('-',$cronEntry);
       return ($curr >= $numberList[0] AND $curr <= $numberList[1]);
     }
-    //every x how */5
-    if(preg_match('~^\*/(\d{1,2})$~',$cronEntry,$match)) {
-      return ($curr%($match[1]) == 0);
-    }
+      //every x how */5
+      //
     return null;
   }    
 }
