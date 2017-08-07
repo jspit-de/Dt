@@ -1,4 +1,4 @@
-# dt (beta)
+# dt 
 
 PHP extension for DateTime.
 ### Features
@@ -21,7 +21,7 @@ dt::setDefaultLanguage('de');  //German
 $dateOfBirth = dt::create('16.3.1975');
 echo 'Ich bin an einem '.$dateOfBirth->formatL('l')
   .' im '.$dateOfBirth->formatL('F').' geboren.';
-//Ich bin an einem Sonntag im März geboren.
+//Ich bin an einem Sonntag im MÃ¤rz geboren.
 
 //diffTotal: units Week, Day, Hour, Minute, Second, Year, Month
 $myAge = $dateOfBirth->diffTotal('today','Years');
