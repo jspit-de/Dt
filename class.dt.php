@@ -508,7 +508,7 @@ class dt extends DateTime{
           ? date_create($day.".".$year) 
           : date_create($day);
       }
-      if($this == $date) { 
+      if($this->format('Y-m-d') == $date->format('Y-m-d')) { 
         if(empty($dateRegion)) return true;  //All Regions
         elseif(strlen($region) == 2 && stripos($dateRegion,$region) !== false) {
           //regional Holiday 
