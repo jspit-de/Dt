@@ -2,8 +2,8 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.4.16                                                         |
-|      Date: 2017-08-07                                                     |
+|   Version: 1.4.17                                                         |
+|      Date: 2017-08-15                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..16, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -31,6 +31,7 @@
  * 2017-07-12 : add day, week and month to cut() (V 1.4.12)
  * 2017-07-27 : + isCron() : check if  cron expression match (V 1.4.13)
  * 2017-07-28 : + nextCron() : date of next cron expression match (V 1.4.14)
+ * 2017-08-15 : + getClockChange, setClockChange
  */
 
 class dt extends DateTime{
@@ -136,7 +137,7 @@ class dt extends DateTime{
   */ 
   public static function create($dt = null, $timeZone = null) {
     try{
-      $dateTime = new self($dt,$timeZone);
+      $dateTime = new static($dt,$timeZone);
     }
     catch (Exception $e) {
       trigger_error(
@@ -399,7 +400,6 @@ class dt extends DateTime{
       trigger_error('Year for '.__METHOD__.' must between 1600 and 2100', E_USER_WARNING); 
       return false;
     }      
-    $easterDays = easter_days($year, $flag);
     if($flag == self::EASTER_WEST) {
       parent::setDate($year,3,21);
     }
@@ -1113,8 +1113,43 @@ class dt extends DateTime{
     }
     return $this;
   }
+
+ /*
+  * @return: DateTime of Clockchange to Summertime ($toWintertime = false) or to Wintertime,
+  *   null if no Clockchange or false if error
+  * @params: $year as YYYY, max. 2037
+  * @params: $toWintertime false or true 
+  * @params: $timeZone string or timezoneobject
+  */
+  public function setClockChange($toWintertime = false){
+    $year = $this->format('Y');
+    $timeZone = $this->getTimeZone();
+    $strDate = self::getClockChangeAsString($year, $toWintertime, $timeZone);
+    if(empty($strDate)) return $strDate;
+    $this->setTimeZone('UTC')
+      ->setDate(substr($strDate,0,10))
+      ->setTime(substr($strDate,11,8))
+      ->setTimezone($timeZone) ;
+    return $this;
+  }
+    
   
-  
+ /*
+  * @return: DateTime of Clockchange to Summertime ($toWintertime = false) or to Wintertime,
+  *   null if no Clockchange or false if error
+  * @params: $year as YYYY, max. 2037
+  * @params: $toWintertime false or true 
+  * @params: $timeZone string or timezoneobject
+  */
+  public static function getClockChange($year, $toWintertime = false, $timeZone = null){
+    if($timeZone === null) $timeZone = date_default_timezone_get();
+    if(is_string($timeZone)) $timeZone = new DateTimeZone($timeZone);
+    if(!($timeZone instanceof DateTimeZone)) return false; //Error
+    $strDate = self::getClockChangeAsString($year, $toWintertime, $timeZone);
+    if(empty($strDate)) return $strDate;
+    $dt = dt::create($strDate);
+    return $dt->setTimeZone($timeZone);
+  }
   
  /*
   * returns true if an error or a warning is present
@@ -1256,5 +1291,24 @@ class dt extends DateTime{
       //every x how */5
       //
     return null;
-  }    
+  }
+
+ /*
+  * @return: DateTime-String of Clockchange to Summertime ($toWintertime = false) or to Wintertime,
+  *   null if no Clockchange or false if error
+  * @params: $year as YYYY, max. 2037
+  * @params: $toWintertime false or true 
+  * @params: $timeZone timezoneobject
+  */
+  private static function getClockChangeAsString($year, $toWintertime,DateTimeZone $timeZone ){
+    if($year > 2037) return false;
+    $filter = function($value) use ($year,$toWintertime) {
+      $isdst = !$toWintertime ;
+      return substr($value['time'],0,4) == $year && $value['isdst'] != $toWintertime;
+    };
+    $sel = array_filter($timeZone->getTransitions(-2051226000),$filter);
+    if(empty($sel))return null;
+    $sel = reset($sel);
+    return $sel['time'];
+  }  
 }
