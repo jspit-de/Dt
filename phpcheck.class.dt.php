@@ -3,14 +3,14 @@ error_reporting(-1);
 ini_set('display_errors', 1);
 header('Content-Type: text/html; charset=UTF-8');
 
-require 'phpcheck.php';
-
+require '../class/phpcheck.php';
+require '../class/class.debug.php';
 $t = new PHPcheck();  
 
 /*
  * Tests Class 
  */
-require 'class.dt.php';
+require '../class/class.dt.php';
 
 //version
 $t->start('exist versions info');
@@ -668,6 +668,27 @@ $nextDay = $date->copy()->modify('next Day');
 $checkOk = ($date == dt::create('2016-01-01')) 
   AND ($nextDay == dt::create('2016-01-02'));
 $t->check((string)$nextDay, $checkOk);
+
+$t->start('Date Clock Change to Summertime 2016');
+$date = dt::getClockChange(2016, false, "Europe/Berlin");
+$t->checkEqual((string)$date, "2016-03-27 03:00:00");
+
+$t->start('Date Clock Change to Wintertime 2016');
+$date = dt::getClockChange(2016, true, "Europe/Berlin");
+$t->checkEqual((string)$date, "2016-10-30 02:00:00");
+
+$t->start('Date Clock Change to Summertime USA 2017');
+$date = dt::getClockChange(2017, false, "America/New_York");
+$t->checkEqual((string)$date, "2017-03-12 03:00:00");
+
+$t->start('Date Clock Change to Summertime Moscow 2017');
+$date = dt::getClockChange(2016, false, "Europe/Moscow");
+$t->checkEqual($date, null);
+
+$t->start('setClockChange to Wintertime USA 2017');
+$date = dt::create('2017-1-1', "America/New_York")
+  ->setClockChange(true);
+$t->checkEqual((string)$date, "2017-11-05 01:00:00");
 
 /*
  * End Tests 
