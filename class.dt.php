@@ -2,8 +2,8 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.4.17                                                         |
-|      Date: 2017-08-15                                                     |
+|   Version: 1.4.18                                                         |
+|      Date: 2017-10-05                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..16, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -952,7 +952,7 @@ class dt extends DateTime{
   }
   
  /*
-  * adds a number of months and days and cut supernumerary
+  * adds a number of months and cut supernumerary
   * Result is always in the current month as DATE_ADD MySQL
   * 2014-1-31 + 1 Month -> 2014-02-28
   * 2014-3-30 - 1 Month -> 2014-02-28  
@@ -1062,7 +1062,7 @@ class dt extends DateTime{
     //Array(Second, Minute,Hour, Day, Month, Weekday)
     $error = false;  
     if(count($cronArr) == 5) {
-      $maxZyk = 200;
+      $maxZyk = 400;
       $sequence = array(3,2,4,1,0);  //month, day, week, hour, minute
       //preparse
       $cronSeq = array();
