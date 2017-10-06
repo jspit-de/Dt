@@ -1,16 +1,18 @@
 # dt 
 
 PHP extension for DateTime.
-###Features
+
+### Features
+
 - Create dt-objects from strings, float/int timestamps or object
 - German and English for input and output,
   other languages can be added
 - Supports microseconds
 - All methods of DateTime can still be used
 
-###Usage
+### Usage
 
-####Create dt-Objects
+#### Create dt-Objects
 
 ```php
 require '/yourpath/class.dt.php';
@@ -40,7 +42,8 @@ $date = dt::createFromRegExFormat($regEx,$string);
 echo $date; //2015-05-17 00:00:00
 ```
 
-####Modify Date
+#### Modify Date
+
 ```php
 //Modify the Year
 $date = dt::create('2015-2-16 19:28:30')->setdate(2000);  //2000-02-16 19:28:30
@@ -88,7 +91,8 @@ echo $date; //2015-04-01 12:00:00
 
 ```
 
-####Calculations
+#### Calculations
+
 ```php
 
 //diffTotal: units Week, Day, Hour, Minute, Second, Year, Month
@@ -110,7 +114,8 @@ $quarter = dt::create('2015-08-10')->getQuarter(); //3
 $date = dt::create('2015-4-1 12:00')->average('2015-4-3 04:00'); //2015-04-02 08:00:00
 ```
 
-####Checks
+#### Checks
+
 ```php
 //check if 12.10.2005 was a saturday or sunday
 $weekEnd = dt::create('12.10.2005')->isWeekend();  //false
@@ -139,6 +144,6 @@ $cronStart = $dateTime->isCron($cronStr);  //true
 
 ```
 
-###Requirements
+### Requirements
 
 - PHP 5.3.8+
