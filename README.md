@@ -143,6 +143,9 @@ $dateTime = dt::create('2017-7-27 01:30:00');
 $cronStart = $dateTime->isCron($cronStr);  //true 
 
 ```
+### Demo and Test
+
+http://jspit.de/check/phpcheck.class.dt.php
 
 ### Requirements
 
