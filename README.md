@@ -27,7 +27,7 @@ dt::setDefaultLanguage('de');  //German
 $dateOfBirth = dt::create('16.3.1975');
 echo 'Ich bin an einem '.$dateOfBirth->formatL('l')
   .' im '.$dateOfBirth->formatL('F').' geboren.';
-//Ich bin an einem Sonntag im März geboren.
+//Ich bin an einem Sonntag im M?rz geboren.
 
 //German Input
 $Date =  dt::create("1.Mai 17");  //2017-05-01 00:00:00
@@ -143,6 +143,30 @@ $dateTime = dt::create('2017-7-27 01:30:00');
 $cronStart = $dateTime->isCron($cronStr);  //true 
 
 ```
+
+#### Example Shophours
+
+```php
+//use cron-syntax
+$shopOpen = [
+  ['open','* 10-11 * * 1-5'], //Mo-Sa 10h-11:59
+  ['open','* 15-17 * * 1-5'], //Mo-Sa 15h-17:59
+  ['close','* * 24,30 12 *'], //Christmas + New Year's Eve
+];
+
+$date = dt::create('Now');
+$open = false;
+if(!$date->isPublicHoliday()){
+  foreach($shopOpen as list($openClose,$cronStr)){
+    $isCron = $date->isCron($cronStr);
+    if($openClose == 'open') $open = $open || $isCron;
+    if($openClose == 'close') $open = $open && !$isCron;
+  }
+}
+ 
+echo $date.' : '.($open ? 'Open' : 'Close');
+```
+
 ### Demo and Test
 
 http://jspit.de/check/phpcheck.class.dt.php
