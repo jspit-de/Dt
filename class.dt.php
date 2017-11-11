@@ -2,11 +2,11 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.4.18                                                         |
-|      Date: 2017-10-05                                                     |
+|   Version: 1.4.20                                                         |
+|      Date: 2017-10-26                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
-| Copyright © 2014..16, Peter Junk (alias jspit). All Rights Reserved.      |
+| Copyright © 2014..17, Peter Junk (alias jspit). All Rights Reserved.      |
 ' ------------------------------------------------------------------------- '
  *
  * 2014-10-07 : + create_from_RegExFormat
@@ -32,6 +32,7 @@
  * 2017-07-27 : + isCron() : check if  cron expression match (V 1.4.13)
  * 2017-07-28 : + nextCron() : date of next cron expression match (V 1.4.14)
  * 2017-08-15 : + getClockChange, setClockChange
+ * 2017-10-26 : + setYear (V 1.4.20)
  */
 
 class dt extends DateTime{
@@ -330,9 +331,7 @@ class dt extends DateTime{
     }
     elseif($par instanceof DateTime) {
       //extract time from $par
-      $hour = (int)$par->format('H');
-      $minute = (int)$par->format('i');
-      $seconds = (int)$par->format('s');
+      list($hour,$minute,$seconds,$microseconds) = explode(' ',$par->format('H i s u'));
     }
     else {
       $hour = $par !== null ? (int)$par : (int)$this->format('H');
@@ -574,7 +573,7 @@ class dt extends DateTime{
   * return numeric representation of the quarter (1..4)
   */
   public function getQuarter() {
-    $quarter = ceil(parent::format('n')/3);
+    $quarter = (parent::format('n')+2)/3;
     return (int)$quarter;
   }
 
@@ -582,8 +581,8 @@ class dt extends DateTime{
   * return the average Date between current Date and refDate
   */
   public function average($refDate) {
-    $ref = self::create($refDate);
-    $avTs = ($ref->getMicroTime() + $this->getMicroTime())/2;
+    $ref = self::create($refDate)->getMicroTime();
+    $avTs = $ref + ($this->getMicroTime() - $ref)/2;
     return $this->setTimestamp($avTs);
   }
 
@@ -901,9 +900,13 @@ class dt extends DateTime{
 
  /*
   * set second ($newSecond Integer) and MicroSeconds
+  * $param newSecond integer, float or dt, datetime Object
   */ 
   public function setSecond($newSecond = 0) {
     list($hour,$minute,$second) = explode(':',$this->format('H:i:s'));
+    if($newSecond instanceof DateTime){
+      $newSecond = $newSecond->format('s.u') + 0.0000001;
+    }
     parent::setTime($hour, $minute, (int)$newSecond);
     $secFragment = fmod($newSecond, 1.0);
     if($secFragment >= 0.000001) {
@@ -914,19 +917,47 @@ class dt extends DateTime{
 
  /*
   * set only minute
+  * $param $newMinute integer, float or dt, datetime Object
   */ 
   public function setMinute($newMinute = 0) {
     list($hour,$minute,$second) = explode(':',$this->format('H:i:s'));
+    if($newMinute instanceof DateTime){
+      $newMinute = $newMinute->format('i');
+    }
     parent::setTime($hour, (int)$newMinute, $second);
     return $this;
   }
 
  /*
   * set only hour
+  * $param $newHour integer, float or dt, datetime Object
   */ 
   public function setHour($newHour = 0) {
     list($hour,$minute,$second) = explode(':',$this->format('H:i:s'));
+    if($newHour instanceof DateTime){
+      $newHour = $newHour->format('H');
+    }
     parent::setTime((int)$newHour, $minute, $second);
+    return $this;
+  }
+
+ /*
+  * set only the year
+  * $param $newYear integer, float or dt, datetime Object or bool
+  * if true then the current or the following year is set 
+     so that the value lies in the future
+  * if false Parameter set current year (Default)
+  */ 
+  public function setYear($newYear = false) {
+    list($month, $day) = explode(':',$this->format('m:d'));
+    
+    if(is_bool($newYear)) $year = date('Y');
+    elseif($newYear instanceof DateTime){
+      $year = $newYear->format('Y');
+    }
+    else $year = (int)$newYear;
+    if($newYear === true AND $month.$day < date('md')) $year++;
+    parent::setDate($year, $month, $day);
     return $this;
   }
   
@@ -1183,7 +1214,33 @@ class dt extends DateTime{
     return $errInfoStr;
   }
 
-  
+ /**
+  * Get a property of dt
+  * @param string $name
+  * @return mixed, false if error
+  */
+  public function __get($name) {
+    $identifier = array(
+      'year' => 'Y',
+      'month' => 'n',
+      'day' => 'j',
+      'hour' => 'G',
+      'minute' => 'i',
+      'second' => 's',
+      'dayOfWeek' => 'w',
+      'dayOfYear' => 'z',
+      'weekOfYear' => 'W',
+      'daysInMonth' => 't',
+    );
+    if(!isset($identifier[$name])) return false;
+    $shortCut = $identifier[$name];
+    if(is_string($shortCut)){
+      if(strlen($shortCut) == 1){
+        return (int) $this->format($shortCut);
+      }
+    }
+    return false;
+  }
     
  /*
   * private
@@ -1203,6 +1260,7 @@ class dt extends DateTime{
   
   private function santinizeGermanDate($dt) {
     // German notation 13.2 -> 13.2.YYYY
+    $dt = trim($dt);
     if(preg_match('/^[0-9]{1,2}\.[0-9]{1,2}\.?$/',$dt)) {
       $dt = rtrim($dt,'.') . date_create('')->format('.Y');
     }
