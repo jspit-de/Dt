@@ -12,7 +12,7 @@ $t = new PHPcheck();
  */
 require '../class/class.dt.php';
 
-//version
+//version 1.4.21
 $t->start('exist versions info');
 $info = $t->getClassVersion("dt");
 $t->check($info, !empty($info));
@@ -48,6 +48,10 @@ $t->checkEqual((string)$date, '1875-11-06 04:09:00');
 $t->start('Create a fix Date dd.mm.yy');
 $date = dt::create('5.6.15');
 $t->checkEqual((string)$date, '2015-06-05 00:00:00');
+
+$t->start('Create a fix Date dd.mm.');
+$date = dt::create('5.6.');
+$t->checkEqual((string)$date, date('Y').'-06-05 00:00:00');
 
 $t->start('Create a fix Date dd.mm.yy HH:ii');
 $date = dt::create('3.4.81 6:9');
@@ -213,6 +217,11 @@ $t->start('set Seconds and Milliseconds');
 $date = dt::create('2011-1-1 13:45:10')->setSecond(3.5);
 $t->checkEqual($date->toStringWithMicro(), '2011-01-01 13:45:03.500000');
 
+$t->start('set Seconds and Milliseconds from dt object');
+$dt = dt::create('2016-10-09 10:00:55.567');
+$date = dt::create('2011-1-1 13:45:10')->setSecond($dt);
+$t->checkEqual($date->toStringWithMicro(), '2011-01-01 13:45:55.567000');
+
 $t->start('set Minute');
 $date = dt::create('2011-1-1 13:45:10')->setMinute(30);
 $t->checkEqual((string)$date, '2011-01-01 13:30:10');
@@ -245,7 +254,24 @@ $t->checkEqual((string)$date, '2015-05-16 13:45:00');
 $t->start('setDate: full date from dt/date-object');
 $dateObject = dt::create("2015/5/16");
 $dateWithTime = dt::create('2011-1-1 13:45')->setDate($dateObject);
-$t->checkEqual((string)$date, '2015-05-16 13:45:00');
+$t->checkEqual((string)$dateWithTime, '2015-05-16 13:45:00');
+
+$t->start('setYear: get year from dt/date-object');
+$dateObject = dt::create("2015/5/16");
+$dateWithTime = dt::create('2011-1-1 13:45')->setYear($dateObject);
+$t->checkEqual((string)$dateWithTime, '2015-01-01 13:45:00');
+
+$t->start('setYear: get current year');
+$dateWithTime = dt::create('2011-06-12 14:15')->setYear();
+$t->checkEqual((string)$dateWithTime, date('Y').'-06-12 14:15:00');
+
+$t->start('setYear: get next year in future');
+$dateWithTime = dt::create('2011-01-01 00:00:56')->setYear(true);
+$t->checkEqual((string)$dateWithTime, (date('Y')+1).'-01-01 00:00:56');
+
+$t->start('setYear: set year with fix number');
+$dateWithTime = dt::create('2012-10-15 16:25')->setYear(2015);
+$t->checkEqual((string)$dateWithTime, '2015-10-15 16:25:00');
 
 $t->start('set the ISOweek');
 $date =dt::create('2014-5-6 07:04:30')->setISOweek(51);
@@ -271,6 +297,54 @@ $t->checkEqual($result, 1);
 $t->start('get quarter number of 2015-4-1');
 $result = dt::create('2015-4-1')->getQuarter();
 $t->checkEqual($result, 2);
+
+$t->start('get year as integer');
+$result = dt::create('2015-4-1 06:15:46')->year;
+$t->checkEqual($result, 2015);
+
+$t->start('get month as integer');
+$result = dt::create('2015-4-1 06:15:46')->month;
+$t->checkEqual($result, 4);
+
+$t->start('get day as integer');
+$result = dt::create('2015-04-07 06:15:46')->day;
+$t->checkEqual($result, 7);
+
+$t->start('get hour as integer');
+$result = dt::create('2015-4-14 06:15:46')->hour;
+$t->checkEqual($result, 6);
+
+$t->start('get minute as integer');
+$result = dt::create('2015-4-14 06:15:46')->minute;
+$t->checkEqual($result, 15);
+
+$t->start('get second as integer');
+$result = dt::create('2015-4-14 06:15:46')->second;
+$t->checkEqual($result, 46);
+
+$t->start('get microSecond as integer');
+$result = dt::create('2015-4-14 06:15:46.123')->microSecond;
+$t->checkEqual($result, 123000);
+
+$t->start('get dayOfWeek ISO 8601 Monday: 1');
+//ISO 8601 1: Monday .. 7: Sunday 
+$result = dt::create('next Monday')->dayOfWeek;
+$t->checkEqual($result, 1);
+
+$t->start('get dayOfWeek ISO 8601 Saturday: 6');
+//ISO 8601 1: Monday .. 7: Sunday 
+$result = dt::create('next Saturday')->dayOfWeek;
+$t->checkEqual($result, 6);
+
+$t->start('get dayOfWeek ISO 8601 Sunday: 7');
+//ISO 8601 1: Monday .. 7: Sunday 
+$result = dt::create('next Sunday')->dayOfWeek;
+$t->checkEqual($result, 7);
+
+$t->start('get dayOfYear from 2017-11-18 as integer');
+//Day of the year starts with 1 on 1.1.
+$result = dt::create('2017-11-18')->dayOfYear;
+$t->checkEqual($result, 322);
 
 $t->start('average of 2 dates');
 $result = dt::create('2015-4-1')->average('2015-4-2');
@@ -455,11 +529,13 @@ $t->start('set date 2015 to easter');
 $easterDate =  dt::create("1.1.2015 12:15")->setEasterDate();
 $t->checkEqual((string)$easterDate, '2015-04-05 00:00:00');
 
-$t->start('set date 1526 to easter: false');
-$t->setErrorLevel(0);//error reporting off for this test
-$easterDate =  dt::create("1526-1-1")->setEasterDate();
-$t->restoreErrorLevel();
-$t->checkEqual($easterDate, false);
+$t->start('set date 1526 to easter: bad Date -> exception');
+try{
+  $result =  dt::create("1526-1-1")->setEasterDate();
+} catch(Exception $e){
+  $result = $e->getMessage();  
+}
+$t->check($result, is_string($result));
 
 $t->start('set date 1626 to easter');
 $easterDate =  dt::create("1626-1-1")->setEasterDate();
@@ -614,15 +690,43 @@ $cronStr = "20,30 1 * * 1-5";  //mo-fr 01:20, 1:30
 $result = dt::create('2017-7-27 01:30:00')->isCron($cronStr);
 $t->checkEqual($result, true);
 
-$t->start('nextCron next Day 01:05 : ok');
-$cronStr = "5 1 * * *";  //mo-fr 01:20, 1:30
+$t->start('nextCron Mi 31.5.2017 : Do 1.6 01:05 : ok');
+$cronStr = "5 1 * * *";  //every Day 1:05
 $result = dt::create('2017-5-31 01:06:00')->nextCron($cronStr);
 $t->checkEqual((string)$result, '2017-06-01 01:05:00');
 
-$t->start('nextCron next Day 01:05 : ok');
+$t->start(' Sa. 29.7.2017 nextCron Mo. 31.7.2017 01:05');
 $cronStr = "*/30 1 * * 1-5";  //1:00, 1:30 every weekday
 $result = dt::create('2017-7-29 01:06:00')->nextCron($cronStr);
 $t->checkEqual((string)$result, '2017-07-31 01:00:00');
+
+$t->start('nextCron throw Exception for cron"60 * * * *"');
+$cronStr = "60 * * * *";  //invalid cron
+try{
+  $result = dt::create('2017-7-29 01:06:00')->nextCron($cronStr);
+} catch(Exception $e) {
+  $result = $e->getMessage();
+}  
+$t->checkContains($result, 'invalid,Parameter');
+
+$t->start('previousCron Do 1.6.2017 01:05 : ok');
+$cronStr = "5 1 * * *";  //every Day 1:05
+$result = dt::create('2017-06-01 01:05:00')->previousCron($cronStr);
+$t->checkEqual((string)$result, '2017-05-31 01:05:00');
+
+$t->start('previousCron Do 1.6.2017 01:35 : 1:20');
+$cronStr = "*/20 * * * *";  //every 20 Minutes
+$result = dt::create('2017-06-01 01:35:17')->previousCron($cronStr);
+$t->checkEqual((string)$result, '2017-06-01 01:20:00');
+
+$t->start('previousCron 1.6.2017 01:05 : 1:20');
+$cronStr = "10 1 1 * *";  //every month 1:10
+$result = dt::create('2017-06-01 01:05:08')->previousCron($cronStr);
+$t->checkEqual((string)$result, '2017-05-01 01:10:00');
+
+$t->start('1.6.2017 01:05 toCron');
+$result = dt::create('2017-06-01 01:05:08')->toCron();
+$t->checkEqual((string)$result, '5 1 1 6 *');
 
 $t->start('chain: german "Buß und Bettag" 2015');
 $date = dt::create('2015-1-1')->chain('11/23|last Wed');
