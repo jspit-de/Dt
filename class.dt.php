@@ -2,8 +2,8 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.4.20                                                         |
-|      Date: 2017-10-26                                                     |
+|   Version: 1.4.21                                                         |
+|      Date: 2017-11-18                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..17, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -33,6 +33,7 @@
  * 2017-07-28 : + nextCron() : date of next cron expression match (V 1.4.14)
  * 2017-08-15 : + getClockChange, setClockChange
  * 2017-10-26 : + setYear (V 1.4.20)
+ * 2017-11-17 : + previousCron (V 1.4.21)
  */
 
 class dt extends DateTime{
@@ -391,13 +392,13 @@ class dt extends DateTime{
  /*
   * set Date to Eastern
   * 1600-1-1 < date < 2100-1-1
+  * throw exeption if error
   */
   public function setEasterDate($flag = self::EASTER_WEST){
     parent::setTime(0,0,0);
     $year = (int)parent::format('Y');
     if($year < 1600 or $year >= 2100){
-      trigger_error('Year for '.__METHOD__.' must between 1600 and 2100', E_USER_WARNING); 
-      return false;
+      throw new Exception('Year for '.__METHOD__.' must between 1600 and 2100');
     }      
     if($flag == self::EASTER_WEST) {
       parent::setDate($year,3,21);
@@ -1009,8 +1010,7 @@ class dt extends DateTime{
   public function addTime($timeInterval) {
     $seconds = self::totalRelTime($timeInterval);
     if($seconds === false) {
-      trigger_error('Parameter for '.__METHOD__.' is not a valid time', E_USER_WARNING);
-      return $this;
+      throw new Exception('Parameter for '.__METHOD__.' is not a valid time');
     }
     return $this->addSeconds($seconds);
   }  
@@ -1022,14 +1022,14 @@ class dt extends DateTime{
   public function subTime($timeInterval) {
     $seconds = -self::totalRelTime($timeInterval);
     if($seconds === false) {
-      trigger_error('Parameter for '.__METHOD__.' is not a valid time', E_USER_WARNING);
-      return $this;
+      throw new Exception('Parameter for '.__METHOD__.' is not a valid time');
     }
     return $this->addSeconds($seconds);
   }
 
  /*
   * add a number of Seconds (Int/Float)
+  * throw exception if error
   * negative values are permissible
   */  
   public function addSeconds($seconds) {
@@ -1047,7 +1047,7 @@ class dt extends DateTime{
       $this->modify(sprintf('%+.0f',$fullSeconds).' Seconds');
     }
     else {
-      trigger_error('Parameter for '.__METHOD__.' is not Int or Float', E_USER_WARNING);
+      throw new Exception('Parameter for '.__METHOD__.' is not Int or Float');
       return false;
     }
     return $this;
@@ -1088,7 +1088,7 @@ class dt extends DateTime{
   * @para $cronStr cron-expression e.g "15 * * * *"
   */
   public function nextCron($cronStr){
-    $this->setSecond(0)->modify("+ 1 Minute");
+    $this->setSecond(0)->modify("+1 Minute");
     $cronArr = preg_split('/\s+/',$cronStr); 
     //Array(Second, Minute,Hour, Day, Month, Weekday)
     $error = false;  
@@ -1138,13 +1138,84 @@ class dt extends DateTime{
     }
     if($error) {
       $msg = 'invalid Parameter $cronStr "'.$cronStr.'" for '.__METHOD__;
-      trigger_error($msg, E_USER_WARNING);
       $this->errorInfo = $msg;
-      $this->modify("1970-1-1 00:00");
+      throw new Exception($msg);
     }
     return $this;
   }
 
+ /*
+  * get the previous run date of a cron expression
+  * @return dt
+  *  if error return 1970-01-01, isError() return true,
+  *  more Info with getErrorInfo()  
+  * @para $cronStr cron-expression e.g "15 * * * *"
+  */
+  public function previousCron($cronStr){
+    $this->setSecond(0)->modify("-1 Minute");
+    $cronArr = preg_split('/\s+/',$cronStr); 
+    //Array(Second, Minute,Hour, Day, Month, Weekday)
+    $error = false;  
+    if(count($cronArr) == 5) {
+      $maxZyk = 400;
+      $sequence = array(3,2,4,1,0);  //month, day, week, hour, minute
+      //preparse
+      $cronSeq = array();
+      foreach($sequence as $i){
+        $cronEntry = $cronArr[$i];
+        if($cronEntry == "*") continue;
+        $cronSeq[$i] = $cronEntry; //not '*'
+      }
+      while($maxZyk--){
+        foreach($cronSeq as $i => $cronEntry){
+          $currArr = explode(' ',$this->format('i H d m w'));
+          $cronMatch = $this->matchCronEntry($currArr[$i], $cronEntry);
+          if($cronMatch === false){
+            if($i==3) $this->modify('last Day of previous Month  23:59'); //month
+            elseif($i == 2 OR $i == 4) $this->modify('previous Day 23:59'); //day,weekday
+            elseif($i == 1) {
+              //hour
+              if(ctype_digit($cronEntry)) {
+                parent::setTime($cronEntry,59,0);
+                if($cronEntry > $currArr[1]) $this->modify('-1 day');
+              }
+              else $this->modify('-1 hour')->setTime(null,59,0); //hour
+            }
+            else {
+              //minute
+              if(ctype_digit($cronEntry)){
+                $this->setTime(null,$cronEntry,0);
+                if($cronEntry > $currArr[0]) $this->modify('-1 hour');
+              }
+              else $this->modify('-1 minute');
+            }
+            continue 2;
+          }
+          elseif($cronMatch === null) {
+            $error = true;
+            break 2;
+          }
+        }
+        break;
+      }
+      if($maxZyk <= 0) $error = true;
+    }
+    if($error) {
+      $msg = 'invalid Parameter $cronStr "'.$cronStr.'" for '.__METHOD__;
+      $this->errorInfo = $msg;
+      throw new Exception($msg);
+    }
+    return $this;
+  }
+  
+ /*
+  * get a cron string from datetime
+  * @return string
+  */
+  public function toCron(){
+    return preg_replace('~^0(\d)~','$1',$this->format('i G j n *'));
+  }
+  
  /*
   * @return: DateTime of Clockchange to Summertime ($toWintertime = false) or to Wintertime,
   *   null if no Clockchange or false if error
@@ -1227,8 +1298,14 @@ class dt extends DateTime{
       'hour' => 'G',
       'minute' => 'i',
       'second' => 's',
-      'dayOfWeek' => 'w',
-      'dayOfYear' => 'z',
+      'microSecond' => 'u',
+      'dayOfWeek' => function(){ //ISO 8601 1=Monaday..7=Sunday
+          $w = $this->format('w');
+          return $w ? (int)$w : 7;
+        },
+      'dayOfYear' => function(){//1-366 ISO 8601
+          return $this->format('z')+1;
+        },
       'weekOfYear' => 'W',
       'daysInMonth' => 't',
     );
@@ -1238,6 +1315,10 @@ class dt extends DateTime{
       if(strlen($shortCut) == 1){
         return (int) $this->format($shortCut);
       }
+      return false;
+    }
+    elseif(is_callable($shortCut)) {
+      return $shortCut();
     }
     return false;
   }
