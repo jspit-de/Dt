@@ -346,6 +346,10 @@ $t->start('get dayOfYear from 2017-11-18 as integer');
 $result = dt::create('2017-11-18')->dayOfYear;
 $t->checkEqual($result, 322);
 
+$t->start('get unknown property : false');
+$result = dt::create('2017-11-18')->unknown;
+$t->checkEqual($result, false);
+
 $t->start('average of 2 dates');
 $result = dt::create('2015-4-1')->average('2015-4-2');
 $expect = '2015-04-01 12:00:00.000000';
@@ -699,6 +703,15 @@ $t->start(' Sa. 29.7.2017 nextCron Mo. 31.7.2017 01:05');
 $cronStr = "*/30 1 * * 1-5";  //1:00, 1:30 every weekday
 $result = dt::create('2017-7-29 01:06:00')->nextCron($cronStr);
 $t->checkEqual((string)$result, '2017-07-31 01:00:00');
+
+$t->start('nextCron throw Exception for cron"* * * * 7"');
+$cronStr = "* * * * 7";  //invalid cron
+try{
+  $result = dt::create('2017-7-29 01:06:00')->nextCron($cronStr);
+} catch(Exception $e) {
+  $result = $e->getMessage();
+}  
+$t->checkContains($result, 'invalid,Parameter');
 
 $t->start('nextCron throw Exception for cron"60 * * * *"');
 $cronStr = "60 * * * *";  //invalid cron
