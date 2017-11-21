@@ -2,8 +2,8 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.4.21                                                         |
-|      Date: 2017-11-18                                                     |
+|   Version: 1.4.22                                                         |
+|      Date: 2017-11-21                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..17, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -34,6 +34,7 @@
  * 2017-08-15 : + getClockChange, setClockChange
  * 2017-10-26 : + setYear (V 1.4.20)
  * 2017-11-17 : + previousCron (V 1.4.21)
+ * 2017-11-20 : + remove Bug for PHP5.3 (V 1.4.22)
  */
 
 class dt extends DateTime{
@@ -1088,54 +1089,57 @@ class dt extends DateTime{
   * @para $cronStr cron-expression e.g "15 * * * *"
   */
   public function nextCron($cronStr){
-    $this->setSecond(0)->modify("+1 Minute");
-    $cronArr = preg_split('/\s+/',$cronStr); 
-    //Array(Second, Minute,Hour, Day, Month, Weekday)
-    $error = false;  
-    if(count($cronArr) == 5) {
-      $maxZyk = 400;
-      $sequence = array(3,2,4,1,0);  //month, day, week, hour, minute
-      //preparse
-      $cronSeq = array();
-      foreach($sequence as $i){
-        $cronEntry = $cronArr[$i];
-        if($cronEntry == "*") continue;
-        $cronSeq[$i] = $cronEntry; //not '*'
-      }
-      while($maxZyk--){
-        foreach($cronSeq as $i => $cronEntry){
-          $currArr = explode(' ',$this->format('i H d m w'));
-          $cronMatch = $this->matchCronEntry($currArr[$i], $cronEntry);
-          if($cronMatch === false){
-            if($i==3) $this->modify('first Day of next Month  00:00'); //month
-            elseif($i == 2 OR $i == 4) $this->modify('next Day 00:00'); //day,weekday
-            elseif($i == 1) {
-              //hour
-              if(ctype_digit($cronEntry)) {
-                parent::setTime($cronEntry,0,0);
-                if($cronEntry < $currArr[1]) $this->modify('+1 day');
-              }
-              else $this->modify('+1 hour')->setTime(null,0,0); //hour
-            }
-            else {
-              //minute
-              if(ctype_digit($cronEntry)){
-                $this->setTime(null,$cronEntry,0);
-                if($cronEntry < $currArr[0]) $this->modify('+1 hour');
-              }
-              else $this->modify('+1 minute');
-            }
-            continue 2;
-          }
-          elseif($cronMatch === null) {
-            $error = true;
-            break 2;
-          }
+    if(preg_match('~^([0-9,*\-/]+ ){4}[0-6,*\-]+~',$cronStr)){
+      $this->setSecond(0)->modify("+1 Minute");
+      $cronArr = preg_split('/\s+/',$cronStr); 
+      //Array(Second, Minute,Hour, Day, Month, Weekday)
+      $error = false;  
+      if(count($cronArr) == 5) {
+        $maxZyk = 1000;
+        $sequence = array(3,2,4,1,0);  //month, day, week, hour, minute
+        //preparse
+        $cronSeq = array();
+        foreach($sequence as $i){
+          $cronEntry = $cronArr[$i];
+          if($cronEntry == "*") continue;
+          $cronSeq[$i] = $cronEntry; //not '*'
         }
-        break;
+        while($maxZyk--){
+          foreach($cronSeq as $i => $cronEntry){
+            $currArr = explode(' ',$this->format('i H d m w'));
+            $cronMatch = $this->matchCronEntry($currArr[$i], $cronEntry);
+            if($cronMatch === false){
+              if($i==3) $this->modify('first Day of next Month  00:00'); //month
+              elseif($i == 2 OR $i == 4) $this->modify('next Day 00:00'); //day,weekday
+              elseif($i == 1) {
+                //hour
+                if(ctype_digit($cronEntry)) {
+                  parent::setTime($cronEntry,0,0);
+                  if($cronEntry < $currArr[1]) $this->modify('+1 day');
+                }
+                else $this->modify('+1 hour')->setTime(null,0,0); //hour
+              }
+              else {
+                //minute
+                if(ctype_digit($cronEntry)){
+                  $this->setTime(null,$cronEntry,0);
+                  if($cronEntry < $currArr[0]) $this->modify('+1 hour');
+                }
+                else $this->modify('+1 minute');
+              }
+              continue 2;
+            }
+            elseif($cronMatch === null) {
+              $error = true;
+              break 2;
+            }
+          }
+          break;
+        }
+        if($maxZyk <= 0) $error = true;
       }
-      if($maxZyk <= 0) $error = true;
     }
+    else $error = true;
     if($error) {
       $msg = 'invalid Parameter $cronStr "'.$cronStr.'" for '.__METHOD__;
       $this->errorInfo = $msg;
@@ -1152,54 +1156,56 @@ class dt extends DateTime{
   * @para $cronStr cron-expression e.g "15 * * * *"
   */
   public function previousCron($cronStr){
-    $this->setSecond(0)->modify("-1 Minute");
-    $cronArr = preg_split('/\s+/',$cronStr); 
-    //Array(Second, Minute,Hour, Day, Month, Weekday)
-    $error = false;  
-    if(count($cronArr) == 5) {
-      $maxZyk = 400;
-      $sequence = array(3,2,4,1,0);  //month, day, week, hour, minute
-      //preparse
-      $cronSeq = array();
-      foreach($sequence as $i){
-        $cronEntry = $cronArr[$i];
-        if($cronEntry == "*") continue;
-        $cronSeq[$i] = $cronEntry; //not '*'
-      }
-      while($maxZyk--){
-        foreach($cronSeq as $i => $cronEntry){
-          $currArr = explode(' ',$this->format('i H d m w'));
-          $cronMatch = $this->matchCronEntry($currArr[$i], $cronEntry);
-          if($cronMatch === false){
-            if($i==3) $this->modify('last Day of previous Month  23:59'); //month
-            elseif($i == 2 OR $i == 4) $this->modify('previous Day 23:59'); //day,weekday
-            elseif($i == 1) {
-              //hour
-              if(ctype_digit($cronEntry)) {
-                parent::setTime($cronEntry,59,0);
-                if($cronEntry > $currArr[1]) $this->modify('-1 day');
-              }
-              else $this->modify('-1 hour')->setTime(null,59,0); //hour
-            }
-            else {
-              //minute
-              if(ctype_digit($cronEntry)){
-                $this->setTime(null,$cronEntry,0);
-                if($cronEntry > $currArr[0]) $this->modify('-1 hour');
-              }
-              else $this->modify('-1 minute');
-            }
-            continue 2;
-          }
-          elseif($cronMatch === null) {
-            $error = true;
-            break 2;
-          }
+    if(preg_match('~^([0-9,*\-/]+ ){4}[0-6,*\-]+~',$cronStr)){
+      $this->setSecond(0)->modify("-1 Minute");
+      $cronArr = preg_split('/\s+/',$cronStr); 
+      //Array(Second, Minute,Hour, Day, Month, Weekday)
+      $error = false;  
+      if(count($cronArr) == 5) {
+        $maxZyk = 1000;
+        $sequence = array(3,2,4,1,0);  //month, day, week, hour, minute
+        //preparse
+        $cronSeq = array();
+        foreach($sequence as $i){
+          $cronEntry = $cronArr[$i];
+          if($cronEntry == "*") continue;
+          $cronSeq[$i] = $cronEntry; //not '*'
         }
-        break;
+        while($maxZyk--){
+          foreach($cronSeq as $i => $cronEntry){
+            $currArr = explode(' ',$this->format('i H d m w'));
+            $cronMatch = $this->matchCronEntry($currArr[$i], $cronEntry);
+            if($cronMatch === false){
+              if($i==3) $this->modify('last Day of previous Month  23:59'); //month
+              elseif($i == 2 OR $i == 4) $this->modify('previous Day 23:59'); //day,weekday
+              elseif($i == 1) {
+                //hour
+                if(ctype_digit($cronEntry)) {
+                  parent::setTime($cronEntry,59,0);
+                  if($cronEntry > $currArr[1]) $this->modify('-1 day');
+                }
+                else $this->modify('-1 hour')->setTime(null,59,0); //hour
+              }
+              else {
+                //minute
+                if(ctype_digit($cronEntry)){
+                  $this->setTime(null,$cronEntry,0);
+                  if($cronEntry > $currArr[0]) $this->modify('-1 hour');
+                }
+                else $this->modify('-1 minute');
+              }
+              continue 2;
+            }
+            elseif($cronMatch === null) {
+              $error = true;
+              break 2;
+            }
+          }
+          break;
+        }
+        if($maxZyk <= 0) $error = true;
       }
-      if($maxZyk <= 0) $error = true;
-    }
+    } else $error = true;
     if($error) {
       $msg = 'invalid Parameter $cronStr "'.$cronStr.'" for '.__METHOD__;
       $this->errorInfo = $msg;
@@ -1291,6 +1297,14 @@ class dt extends DateTime{
   * @return mixed, false if error
   */
   public function __get($name) {
+    if($name == 'dayOfWeek') {
+      $w = $this->format('w');
+      return $w ? (int)$w : 7;
+    }
+    if($name == 'dayOfYear') {
+      return $this->format('z')+1;
+    }
+  
     $identifier = array(
       'year' => 'Y',
       'month' => 'n',
@@ -1299,26 +1313,11 @@ class dt extends DateTime{
       'minute' => 'i',
       'second' => 's',
       'microSecond' => 'u',
-      'dayOfWeek' => function(){ //ISO 8601 1=Monaday..7=Sunday
-          $w = $this->format('w');
-          return $w ? (int)$w : 7;
-        },
-      'dayOfYear' => function(){//1-366 ISO 8601
-          return $this->format('z')+1;
-        },
       'weekOfYear' => 'W',
       'daysInMonth' => 't',
     );
-    if(!isset($identifier[$name])) return false;
-    $shortCut = $identifier[$name];
-    if(is_string($shortCut)){
-      if(strlen($shortCut) == 1){
-        return (int) $this->format($shortCut);
-      }
-      return false;
-    }
-    elseif(is_callable($shortCut)) {
-      return $shortCut();
+    if(isset($identifier[$name])) { 
+      return (int) $this->format($identifier[$name]);
     }
     return false;
   }
