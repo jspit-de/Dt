@@ -5,7 +5,7 @@ header('Content-Type: text/html; charset=UTF-8');
 
 require '../class/phpcheck.php';
 require '../class/class.debug.php';
-$t = new PHPcheck();  
+$t = new PHPcheck();  //need min 1.3.17   
 
 /*
  * Tests Class 
@@ -402,8 +402,23 @@ $t->start('cut to start of current week');
 $date = dt::create('2013-12-18 03:48')->cut('1 week');
 $t->checkEqual((string)$date, '2013-12-16 00:00:00');
 
+$t->start('diff: with DateTime');
+$dateTo = new DateTime('2013-12-18 00:15:00');
+$result = dt::create('2013-12-18')->diff($dateTo)->i;  //Minutes
+$t->checkEqual($result, 15);
+
+$t->start('diff: with dt');
+$dateTo = new dt('2013-12-18 00:16:00');
+$result = dt::create('2013-12-18')->diff($dateTo)->i;  //Minutes
+$t->checkEqual($result, 16);
+
 $t->start('diff: with String-Dates');
 $days = dt::create('2013-12-18')->diff('24.12.2013')->days;
+$t->checkEqual($days, 6);
+
+$t->start('diff: with timestamp');
+$timeStamp = strtotime('24.12.2013');
+$days = dt::create('2013-12-18')->diff($timeStamp)->days;
 $t->checkEqual($days, 6);
 
 $t->start('diffTotal: with String-Dates');
@@ -433,6 +448,10 @@ $t->checkEqual($month, 53*12+1);
 $t->start('diffTotal: Seconds');
 $seconds = dt::create('1950-10-1 0:00')->diffTotal('2033-11-4 12:00');
 $t->check($seconds, $seconds == 2622283200);
+
+$t->start('diffTotal: Seconds and Microseconds');
+$seconds = dt::create('2016-06-03 15:30:45.2')->diffTotal('2016-06-03 15:30:47.4');
+$t->checkEqual($seconds, 2.2,"",1E-10); //Delta for Float
 
 $t->start('diffTotal: change winter/summer time');
 $hours = dt::create('2014-03-30 00:00')->diffTotal('2014-03-30 06:00','hour');
@@ -534,13 +553,11 @@ $easterDate =  dt::create("1.1.2015 12:15")->setEasterDate();
 $t->checkEqual((string)$easterDate, '2015-04-05 00:00:00');
 
 $t->start('set date 1526 to easter: bad Date -> exception');
-try{
-  $result =  dt::create("1526-1-1")->setEasterDate();
-} catch(Exception $e){
-  $result = $e->getMessage();  
-}
-$t->check($result, is_string($result));
-
+$closure = function(){
+  dt::create("1526-1-1")->setEasterDate();
+};
+$t->checkException($closure);
+  
 $t->start('set date 1626 to easter');
 $easterDate =  dt::create("1626-1-1")->setEasterDate();
 $t->checkEqual((string)$easterDate, '1626-04-12 00:00:00');
@@ -706,21 +723,17 @@ $t->checkEqual((string)$result, '2017-07-31 01:00:00');
 
 $t->start('nextCron throw Exception for cron"* * * * 7"');
 $cronStr = "* * * * 7";  //invalid cron
-try{
+$closure = function() use($cronStr) {
   $result = dt::create('2017-7-29 01:06:00')->nextCron($cronStr);
-} catch(Exception $e) {
-  $result = $e->getMessage();
-}  
-$t->checkContains($result, 'invalid,Parameter');
+};
+$t->checkException($closure);
 
 $t->start('nextCron throw Exception for cron"60 * * * *"');
 $cronStr = "60 * * * *";  //invalid cron
-try{
+$closure = function() use($cronStr) {
   $result = dt::create('2017-7-29 01:06:00')->nextCron($cronStr);
-} catch(Exception $e) {
-  $result = $e->getMessage();
-}  
-$t->checkContains($result, 'invalid,Parameter');
+};
+$t->checkException($closure);
 
 $t->start('previousCron Do 1.6.2017 01:05 : ok');
 $cronStr = "5 1 * * *";  //every Day 1:05
