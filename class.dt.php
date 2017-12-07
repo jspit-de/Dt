@@ -741,7 +741,7 @@ class dt extends DateTime{
     $total = $total * 60 + $diff->i;
     $total = $total * 60 + $diff->s;
     $total = $diff->invert ? -$total : $total;
-    if($microSec != 0.0) $total += + $microSec; 
+    if($microSec != 0.0) $total += $microSec; 
     if($unit == $unitList['s']) return $total;
     $total /= 60;
     if($unit == $unitList['i']) return $total;
