@@ -2,8 +2,8 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.4.22                                                         |
-|      Date: 2017-11-21                                                     |
+|   Version: 1.4.24                                                         |
+|      Date: 2018-01-09                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..17, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -35,6 +35,8 @@
  * 2017-10-26 : + setYear (V 1.4.20)
  * 2017-11-17 : + previousCron (V 1.4.21)
  * 2017-11-20 : + remove Bug for PHP5.3 (V 1.4.22)
+ * 2017-12-21 : + round
+ * 2018-01-08 : + diffhuman
  */
 
 class dt extends DateTime{
@@ -58,12 +60,18 @@ class dt extends DateTime{
   
   protected static $defaultLanguage = self::DE ;
   
-  //Schlüssel identisch mit ISO 639-1 Language Codes
+  //Keys ISO 639-1 Language Codes
   protected static $mon_days = array(
     self::EN => array("January","February","March","April","May","June","July","August","September","October","November","December",
                   "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday","Sunday"),     
     self::DE => array("Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember",
                   "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag","Sonntag"),
+  );
+  
+  //Units for human diffs
+  protected static $humanUnits = array(
+    self::EN => array('Seconds' => 60,'Minutes' => 60,'Hours' => 24,'Days' => 30.43,'Months' => 12,'Years' => 10000),
+    self::DE => array('Sekunden' => 60,'Minuten' => 60,'Stunden' => 24,'Tage' => 30.43,'Monate' => 12,'Jahre' => 10000),
   );
   
   protected static $strictModeCreate = false;
@@ -600,7 +608,8 @@ class dt extends DateTime{
 
  /* 
   * cut rest
-  * $Interval: number Seconds or String x Hours, x Minutes or x Seconds
+  * $Interval: number Seconds or String x Seconds, x Minutes, x Hours, 
+  * x weeks, x month
   * round with $round = true
   * example: dt::create('2013-12-18 03:48')->cut('15 Minutes') //2013-12-18 03:45:00
   */
@@ -682,6 +691,17 @@ class dt extends DateTime{
   }
   
  /* 
+  * Round DateTime
+  * $Interval: number Seconds or String x Seconds, x Minutes, x Hours, 
+  * x weeks, x month
+  * example: dt::create('2013-12-18 03:38')->round('15 Minutes') //2013-12-18 03:45:00
+  */
+  public function round($Interval=1) {
+    return $this->cut($Interval, true);
+  }
+
+  
+ /* 
   * return DateInterval object
   * diff accept as parameter object, string or timestamp 
   */
@@ -751,6 +771,28 @@ class dt extends DateTime{
     if($unit == $unitList['d']) return $total;
     $total /= 7;
     return $total;
+  }
+  
+ /*
+  * diffHuman return a difference as human readable string
+  * $date: string, objekt DateTime or int/float Timestamp
+  * $language: 'de','en','auto'
+  */
+  public function diffHuman($date=null, $language = null) {
+    //language handling
+    $language = $language === null ? self::$defaultLanguage : $language;
+    if($language == self::AUTO && isset($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
+      $language = strtolower(substr($_SERVER['HTTP_ACCEPT_LANGUAGE'],0,2)); 
+    }
+    if(!array_key_exists($language,static::$humanUnits)) $language = self::EN;
+    $units = static::$humanUnits[$language];
+    
+    $diff = $this->diffTotal($date);
+    foreach($units as $unit => $div){
+      if(abs($diff) < $div * 2) break;
+      $diff /= $div;
+    }
+    return sprintf('%.0f %s',$diff,$unit);
   }
   
  /*
