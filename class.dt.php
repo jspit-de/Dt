@@ -70,8 +70,10 @@ class dt extends DateTime{
   
   //Units for human diffs
   protected static $humanUnits = array(
-    self::EN => array('Seconds' => 60,'Minutes' => 60,'Hours' => 24,'Days' => 30.43,'Months' => 12,'Years' => 10000),
-    self::DE => array('Sekunden' => 60,'Minuten' => 60,'Stunden' => 24,'Tage' => 30.43,'Monate' => 12,'Jahre' => 10000),
+    self::EN => array('Seconds' => 60,'Minutes' => 60,'Hours' => 24,'Days' => 7,'Weeks' => 1.E9,
+      'm' => 'Months','y' => 'Years','y1' => 'Year'),
+    self::DE => array('Sekunden' => 60,'Minuten' => 60,'Stunden' => 24,'Tage' => 7,'Wochen' => 1.E9,
+      'm' => 'Monate','y' => 'Jahre', 'y1' => 'Jahr'),
   );
   
   protected static $strictModeCreate = false;
@@ -788,11 +790,25 @@ class dt extends DateTime{
     $units = static::$humanUnits[$language];
     
     $diff = $this->diffTotal($date);
+    if($diff === false) return false; //Warning from diffTotal
     foreach($units as $unit => $div){
       if(abs($diff) < $div * 2) break;
       $diff /= $div;
     }
-    return sprintf('%.0f %s',$diff,$unit);
+    if($div > 1000 AND abs($diff) > 7) {
+      //Month and Years exact
+      $dateDiff = $this->diff($date);
+      if($dateDiff->y) {
+        $diff = $dateDiff->y;
+        $unit = $diff == 1 ? $units['y1'] : $units['y'];
+        if($dateDiff->invert) $diff = -$diff;
+      }
+      elseif($dateDiff->m >= 2) {
+        $diff = $dateDiff->m;
+        $unit = $units['m'];
+      }
+    }
+    return sprintf('%.0f %s',(int)$diff,$unit);
   }
   
  /*

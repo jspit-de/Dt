@@ -402,6 +402,22 @@ $t->start('cut to start of current week');
 $date = dt::create('2013-12-18 03:48')->cut('1 week');
 $t->checkEqual((string)$date, '2013-12-16 00:00:00');
 
+$t->start('round to nearest 10 minutes');
+$date = dt::create('2013-12-18 03:45:34')->round('10 Minutes');
+$t->checkEqual((string)$date, '2013-12-18 03:50:00');
+
+$t->start('round to nearest 10 minutes');
+$date = dt::create('2013-12-18 03:44:54')->round('10 Minutes');
+$t->checkEqual((string)$date, '2013-12-18 03:40:00');
+
+$t->start('round to nearest 30 minutes');
+$date = dt::create('2013-12-18 03:44:54')->round('30 Minutes');
+$t->checkEqual((string)$date, '2013-12-18 03:30:00');
+
+$t->start('round microseconds to nearest second');
+$date = dt::create('2013-12-18 03:44:54.66')->round();
+$t->checkEqual($date->toStringWithMicro(), '2013-12-18 03:44:55.000000');
+
 $t->start('diff: with DateTime');
 $dateTo = new DateTime('2013-12-18 00:15:00');
 $result = dt::create('2013-12-18')->diff($dateTo)->i;  //Minutes
@@ -421,6 +437,7 @@ $timeStamp = strtotime('24.12.2013');
 $days = dt::create('2013-12-18')->diff($timeStamp)->days;
 $t->checkEqual($days, 6);
 
+//diffTotal
 $t->start('diffTotal: with String-Dates');
 $days = dt::create('2003-10-1 6:30')->diffTotal('2003-10-5 6:30',"days");
 $t->checkEqual($days, 4);
@@ -458,6 +475,50 @@ $hours = dt::create('2014-03-30 00:00')->diffTotal('2014-03-30 06:00','hour');
 $expected = (version_compare(PHP_VERSION, '5.5.8') >= 0) ? 5 : 6;
 $t->checkEqual($hours, $expected);
 
+//diffHuman
+$t->start('diffHuman: de');
+$result = dt::create('2017-01-01')->diffHuman('2017-01-01 00:05:20','de');
+$t->checkEqual($result, '5 Minuten');
+
+$t->start('diffHuman: de');
+$result = dt::create('2017-01-01')->diffHuman('2017-01-01 00:05:20','de');
+$t->checkEqual($result, '5 Minuten');
+
+$t->start('diffHuman: de');
+$result = dt::create('2017-01-01')->diffHuman('2017-01-02 02:05:20','de');
+$t->checkEqual($result, '26 Stunden');
+
+$t->start('diffHuman: de');
+$result = dt::create('2017-01-01')->diffHuman('2017-01-03 02:05:20','de');
+$t->checkEqual($result, '2 Tage');
+
+$t->start('diffHuman: de 9 Tage');
+$result = dt::create('2017-01-01')->diffHuman('2017-01-10 02:05:20','de');
+$t->checkEqual($result, '9 Tage');
+
+$t->start('diffHuman: de 2 Wochen');
+$result = dt::create('2017-01-01')->diffHuman('2017-01-15 02:05:20','de');
+$t->checkEqual($result, '2 Wochen');
+
+$t->start('diffHuman: de 6 Monate');
+$result = dt::create('2157-02-01')->diffHuman('2157-08-02 02:05:20','de');
+$t->checkEqual($result, '6 Monate');
+
+$t->start('diffHuman: Age Years de');
+//Age Albrecht Dürer * 21. Mai 1471 † 6. April 1528
+$result = dt::create('21. Mai 1471')->diffHuman('6. April 1528','de');
+$t->checkEqual($result, '56 Jahre');
+
+$t->start('diffHuman: Age Years en');
+//Age Albrecht Dürer * 21. Mai 1471 † 6. April 1528
+$result = dt::create('21. Mai 1471')->diffHuman('6. April 1528','en');
+$t->checkEqual($result, '56 Years');
+
+$t->start('diffHuman: negative default-language');
+$result = dt::create('2017-01-07')->diffHuman('2017-01-01');
+$t->checkEqual($result, '-6 Tage');
+
+//diffUTC
 $t->start('diffUTC: change winter/summer time');
 $hours = dt::create('2014-03-30 00:00')->diffUTC('2014-03-30 06:00','hour');
 $t->checkEqual($hours, 5.0);
