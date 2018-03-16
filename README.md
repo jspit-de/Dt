@@ -27,7 +27,7 @@ dt::setDefaultLanguage('de');  //German
 $dateOfBirth = dt::create('16.3.1975');
 echo 'Ich bin an einem '.$dateOfBirth->formatL('l')
   .' im '.$dateOfBirth->formatL('F').' geboren.';
-//Ich bin an einem Sonntag im M?rz geboren.
+//Ich bin an einem Sonntag im März geboren.
 
 //German Input
 $Date =  dt::create("1.Mai 17");  //2017-05-01 00:00:00
