@@ -1,4 +1,6 @@
 <?php
+//last modify: 2018-08-03
+//check for class dt v1.5
 error_reporting(-1);
 ini_set('display_errors', 1);
 header('Content-Type: text/html; charset=UTF-8');
@@ -106,6 +108,43 @@ $t->start('Create Date from a big negativ Float Timestamp');
 $date = dt::create(-22144582800.);
 $t->checkEqual((string)$date, '1268-04-07 00:00:00');
 
+//create with wildcards
+$t->start('Create Now with Wildcards');
+$date = dt::create("{{year}}-{{month}}-{{day}}");
+$t->checkEqual((string)$date, date("Y-m-d H:i:s"));
+
+$t->start('Create Today with Wildcards');
+$date = dt::create("{{year}}-{{month}}-{{day}} 00:00");
+$t->checkEqual((string)$date, (string)dt::create("Today"));
+
+$t->start('Create easter date this year with Wildcard');
+$date = dt::create("{{easter}}");
+$expected = dt::create("Today")->setEasterDate();
+$t->checkEqual((string)$date, (string)$expected);
+
+$t->start('last Monday of October this year with Wildcard');
+$date = dt::create("last Monday of October {{year}}");
+$expected = dt::create("last Monday of October this year");
+$t->checkEqual((string)$date, (string)$expected);
+
+$t->start('Basis of Daynumber of 2017-08-01 (date("z")');
+$date = dt::create("2017-08-17 00:00|-{{z}} Days");
+$expected = dt::create("2017-01-01 00:00");
+$t->checkEqual((string)$date, (string)$expected);
+
+$t->start("if 2018-07-29 is Sunday (yes), take the next Monday");
+$date = dt::create("2018-07-29|{{?D=Sun}}next Monday");
+$t->checkEqual((string)$date, "2018-07-30 00:00:00");
+
+$t->start("if 2018-07-28 is Sunday (no), take the next Monday");
+$date = dt::create("2018-07-28|{{?D=Sun}}next Monday");
+$t->checkEqual((string)$date, "2018-07-28 00:00:00");
+
+$t->start('2 Month after 2017-06-15 13:30, Day 5 of this Month, same Time');
+$date = dt::create("2017-06-15 13:30|+2 month|{{Y}}-{{m}}-05");
+$t->checkEqual((string)$date, "2017-08-05 13:30:00");
+
+//
 $t->start('Create Date from not valid String');
 $t->setErrorLevel(0);//error reporting off for this test
 $date = dt::create('31.0x.2015');
@@ -282,6 +321,10 @@ $t->start('get Seconds of Day');
 $seconds = dt::create('2014-5-6 07:04:30')->getDaySeconds();
 $t->checkEqual($seconds, 7*60*60 + 4*60 + 30);
 
+$t->start('get Minutes of Day');
+$seconds = dt::create('2014-5-6 07:04:30')->getDayMinutes();
+$t->checkEqual($seconds, 7*60 + 4);
+
 $t->start('get microseconds part');
 $microSeconds = dt::create('2014-5-6 07:04:30.25')->getMicroSeconds();
 $t->checkEqual($microSeconds, 250000);
@@ -346,6 +389,30 @@ $t->start('get dayOfYear from 2017-11-18 as integer');
 $result = dt::create('2017-11-18')->dayOfYear;
 $t->checkEqual($result, 322);
 
+$t->start('get Date as JD Julian Date Number');
+$result = dt::create('2018-06-25 03:38:25 UTC')->toJD();
+$t->checkEqual($result,2458294.6516782);
+
+$t->start('get JD from old date');
+$result = dt::create('1695-11-25 13:00')->toJD();
+$expect = (float)gregoriantojd ( 11 , 25 , 1695 );
+$t->checkEqual($result,$expect);
+
+$t->start('get JD from date in future');
+$result = dt::create('2081-02-23 13:00')->toJD();
+$expect = (float)gregoriantojd ( 2 , 23 , 2081 );
+$t->checkEqual($result,$expect);
+
+$t->start('create dt from jdn UTC');
+$result = dt::createFromJD(2458294.6516782,"UTC");
+$expect = dt::create('2018-06-25 03:38:25',"UTC");
+$t->check((string)$result,$result == $expect);
+
+$t->start('create dt from jdn Europe/Berlin');
+$result = dt::createFromJD(2458294.6516782);
+$expect = '2018-06-25 05:38:25';
+$t->checkEqual((string)$result,$expect);
+
 $t->start('get unknown property : false');
 $result = dt::create('2017-11-18')->unknown;
 $t->checkEqual($result, false);
@@ -355,7 +422,6 @@ $result = dt::create('2015-4-1')->average('2015-4-2');
 $expect = '2015-04-01 12:00:00.000000';
 $t->checkEqual($result->toStringWithMicro(), $expect);
 
-//cut
 $t->start('get as DateTime');
 $dateTime1 = date_create('Now',new DateTimeZone('UTC'));
 $dateTime = dt::create($dateTime1)->getDateTime();
@@ -366,6 +432,7 @@ $checkOk = ($dateTime == $dateTime1
   );
 $t->check($dateTime, $checkOk);
 
+//cut
 $t->start('cut to full 15 minutes');
 $date = dt::create('2013-12-18 03:55')->cut('15 Minutes');
 $t->checkEqual((string)$date, '2013-12-18 03:45:00');
@@ -418,6 +485,20 @@ $t->start('round microseconds to nearest second');
 $date = dt::create('2013-12-18 03:44:54.66')->round();
 $t->checkEqual($date->toStringWithMicro(), '2013-12-18 03:44:55.000000');
 
+//getModulo
+$t->start('getModulo: get Rest of Minutes after cut 5 Minutes');
+$result = dt::create('2013-12-18 03:47')->getModulo('5 Minutes');
+$t->checkEqual((int)$result, 2);
+
+$t->start('getModulo: get float Rest after cut 5 Minutes');
+$result = dt::create('2013-12-18 03:48:30')->getModulo('10 Minutes');
+$t->checkEqual($result, 8.5);
+
+$t->start('getModulo: get float Rest after cut 5 Minutes');
+$result = dt::create('2013-12-18 03:48:30')->getModulo('10 Minutes',"seconds");
+$t->checkEqual((int)$result, 8 * 60 + 30);
+
+//
 $t->start('diff: with DateTime');
 $dateTo = new DateTime('2013-12-18 00:15:00');
 $result = dt::create('2013-12-18')->diff($dateTo)->i;  //Minutes
@@ -461,6 +542,18 @@ $t->checkEqual($years, 53);
 $t->start('diffTotal: full Month');
 $month = dt::create('1950-10-1 0:00')->diffTotal('2003-11-4 12:00',"Month");
 $t->checkEqual($month, 53*12+1);
+
+$t->start('diffTotal: full Month');
+$month = dt::create('2018-01-01')->diffTotal('2018-03-01',"Month");
+$t->checkEqual($month, 2);
+
+$t->start('diffTotal: full Month');
+$month = dt::create('2017-12-31')->diffTotal('2019-03-02',"Month");
+$t->checkEqual($month, 14);
+
+$t->start('diffTotal: full Month');
+$month = dt::create('2018-02-15 12:00:01')->diffTotal('2018-03-15 12:00:00',"Month");
+$t->checkEqual($month, 0);
 
 $t->start('diffTotal: Seconds');
 $seconds = dt::create('1950-10-1 0:00')->diffTotal('2033-11-4 12:00');
@@ -609,6 +702,10 @@ $t->start('set Float-Timestamp with Milliseconds');
 $date = dt::create()->setTimestamp(3011986800.12);
 $t->checkEqual($date->formatL('Y-m-d H:i:s.u'),'2065-06-12 00:00:00.120000');
 
+$t->start('create Easter-Date for year 1775');
+$easterDate = dt::Easter(1775);
+$t->checkEqual((string)$easterDate, '1775-04-16 00:00:00');
+
 $t->start('set date 2015 to easter');
 $easterDate =  dt::create("1.1.2015 12:15")->setEasterDate();
 $t->checkEqual((string)$easterDate, '2015-04-05 00:00:00');
@@ -626,6 +723,16 @@ $t->checkEqual((string)$easterDate, '1626-04-12 00:00:00');
 $t->start('set date 1626 to easter orthodox');
 $easterDate =  dt::create("1626-1-1")->setEasterDate(dt::EASTER_EAST);
 $t->checkEqual((string)$easterDate, '1626-04-19 00:00:00');
+
+
+
+$t->start('get date to first day of Passover 2018');
+$passoverDate2018 = dt::Passover(2018);
+$t->checkEqual((string)$passoverDate2018, '2018-03-31 00:00:00');
+
+$t->start('set date to first day of Passover 2019');
+$passoverDate2019 = dt::create("2019-1-1")->setPassoverDate();
+$t->checkEqual((string)$passoverDate2019, '2019-04-20 00:00:00');
 
 //
 $t->start('was in berlin in june 2011 summertime');
@@ -673,78 +780,6 @@ $t->checkEqual($isInWeek, false);
 $t->start('is 23.11.2015 in same week how 22.11.2015 - no');
 $isInWeek = dt::create('23.11.2015')->isInWeek('22.11.2015');
 $t->checkEqual($isInWeek, false);
-
-$t->start('is 25 Dez a public Holiday - yes');
-$isHoliday = dt::create('25 Dec 2016')->isPublicHoliday();
-$t->checkEqual($isHoliday, true);
-
-$t->start('is 24.12 a public Holiday - no');
-$isHoliday = dt::create('24 Dezember 2016')->isPublicHoliday();
-$t->checkEqual($isHoliday, false);
-
-$t->start('check Holidaylist for bad list');
-$ChrismasAndSylvester = '24.12 and 31.12';
-$errStr = dt::detectHolidayListError($ChrismasAndSylvester);  
-$t->check($errStr, $errStr !== "");
-
-$t->start('check Holidaylist with Chrismas and Sylvester');
-$ChrismasAndSylvester = '24.12,31.12';
-$errStr = dt::detectHolidayListError($ChrismasAndSylvester);  
-$t->checkEqual($errStr,"");
-
-$t->start('add Chrismas and Sylvester to Holidaylist');
-$ChrismasAndSylvester = '24.12,31.12';
-$isOk = dt::addHolidayList($ChrismasAndSylvester);  
-$t->checkEqual($isOk, true);
-
-$t->start('is 24 Dez now public Holiday - yes');
-$isHoliday = dt::create('24 Dec 2016')->isPublicHoliday();
-$t->checkEqual($isHoliday, true);
-
-$t->start('is Fronleichnahm 2017 public Holiday - no');
-$isHoliday = dt::create('15.06.2017')->isPublicHoliday();
-$t->checkEqual($isHoliday, false);
-
-$t->start('is Fronleichnahm 2017 in Berlin Holiday - no');
-$isHoliday = dt::create('15.06.2017')->isPublicHoliday('BE');
-$t->checkEqual($isHoliday, false);
-
-$t->start('is Fronleichnahm 2017 in BY Holiday - yes');
-$isHoliday = dt::create('15.06.2017')->isPublicHoliday('BY');
-$t->checkEqual($isHoliday, true);
-
-$t->start('is Buß und Bettag in SN Holiday - yes');
-$isHoliday = dt::create('2015-11-18')->isPublicHoliday('SN');
-$t->checkEqual($isHoliday, true);
-
-$t->start('is Buß und Bettag Holiday for all in D - no');
-$isHoliday = dt::create('2015-11-18')->isPublicHoliday();
-$t->checkEqual($isHoliday, false);
-
-$t->start('is 3.10 a public Holiday - yes');
-$isHoliday = dt::create('03 Oct 2016')->isPublicHoliday();
-$t->checkEqual($isHoliday, true);
-
-$t->start('set Holidaylist for Austria');
-$list = '1.1,6.1,E+1,1.5,E+39,E+50,E+60,15.8,26.10,1.11,8.12,25.12,26.12';
-$result = dt::setHolidayList($list);
-$t->checkEqual($result, true);
-
-$t->start('is 3.10 in AT a public Holiday - no');
-$isHoliday = dt::create('03 Oct 2016')->isPublicHoliday();
-$t->checkEqual($isHoliday, false);
-
-$t->start('is 26.10 in AT a public Holiday - yes');
-$isHoliday = dt::create('26 Oct 2016')->isPublicHoliday();
-$t->checkEqual($isHoliday, true);
-
-$t->start('set Holidaylist to default');
-$result = dt::setHolidayList();
-$t->checkEqual($result, true);
-
-$t->start('is 3.10 now a public  Holiday - yes');
-$isHoliday = dt::create('03 Oct 2016')->isPublicHoliday();
-$t->checkEqual($isHoliday, true);
 
 //isCron
 $t->start('isCron 00:01: ok');
@@ -823,6 +858,10 @@ $t->start('chain: easter Monday 2016');
 $date = dt::create('2016-1-1')->chain('{{easter}}|+1 Day');
 $t->checkEqual((string)$date, '2016-03-28 00:00:00');
 
+$t->start('Jom Kippur with chain and passover wildcard');
+$date = dt::create('2018-1-1')->chain("{{passover}}|+172 Days");
+$t->checkEqual((string)$date, '2018-09-19 00:00:00');
+
 $t->start('chain: 1. advent this Year');
 $date = dt::create('today')->chain('12/25|last Sunday|-3 weeks');
 $expect = dt::create('26.11')->modify('next sunday');
@@ -887,6 +926,5 @@ $t->checkEqual((string)$date, "2017-11-05 01:00:00");
 
 //output as table
 echo $t->gethtml();
-
 
 

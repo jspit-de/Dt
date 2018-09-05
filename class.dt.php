@@ -2,46 +2,18 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.4.24                                                         |
-|      Date: 2018-01-09                                                     |
+|   Version: 1.5.1                                                          |
+|      Date: 2018-09-03                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..17, Peter Junk (alias jspit). All Rights Reserved.      |
 ' ------------------------------------------------------------------------- '
- *
- * 2014-10-07 : + create_from_RegExFormat
- * 2014-10-08 : + float Timestamp
- * 2014-10-27 : + addMonthCut
- * 2014-11-10 : + microsek Timestamp
- * 2014-12-19 : + diff
- * 2015-01-07 : + EasterDay
- * 2015-01-12 : + diffUTC
- * 2015-01-20 : + dt. Format dd.mm.yy
- * 2015-03-31 : + addSeconds, addTime, subTime
- * 2015-04-02 : + setStrictModeCreate, getLastErrorsAsString, isError, getErrorInfo
- * 2015-04-29 : + isWeekend, isPublicHoliday
- * 2015-08-06 : + date_interval_create_from_float
- * 2016-11-15 : + isLeapYear
- * 2017-01-19 : + cloneSelf (>1.4.11 copy())
- * 2017-04-27 : + Regionen (Part 2 Code ISO 3166-2:DE) for isPublicHoliday
- * 2017-05-02 : + chain with optional parameterlist (V 1.4.7)
- * 2017-05-03 : + month, year for diffTotal (V 1.4.8)
- * 2017-07-03 : setTime + microseconds (PHP >= 7.1) (V 1.4.8)
- * 2017-07-11 : new Name getMicroTime, no overwerite getTimestamp
- * 2017-07-12 : add day, week and month to cut() (V 1.4.12)
- * 2017-07-27 : + isCron() : check if  cron expression match (V 1.4.13)
- * 2017-07-28 : + nextCron() : date of next cron expression match (V 1.4.14)
- * 2017-08-15 : + getClockChange, setClockChange
- * 2017-10-26 : + setYear (V 1.4.20)
- * 2017-11-17 : + previousCron (V 1.4.21)
- * 2017-11-20 : + remove Bug for PHP5.3 (V 1.4.22)
- * 2017-12-21 : + round
- * 2018-01-08 : + diffhuman
  */
 
 class dt extends DateTime{
 
   const AUTO = 'auto';  //detect from 'HTTP_ACCEPT_LANGUAGE'
+  const EN_PHP = 'en_php';
   const EN = 'en';
   const DE = 'de';
   
@@ -54,15 +26,11 @@ class dt extends DateTime{
   
   const PAGE_ENCODING = 'UTF-8';
   
-  //24.12 and 31.12 not in list
-  const DE_HOLIDAYLIST = '1.1,E-2,E+0,E+1,1.5,E+39,E+49,E+50,3.10,25.12,26.12,31.10.2017,
-  6.1:BW.BY.ST,E+60:BW.BY.HE.NW.RP.SL.SN.TH,15.8:BY.SL,31.10:BW.BB.MV.SN.ST.TH,1.11:BW.BY.NW.RP.SL,B:SN';
-  
   protected static $defaultLanguage = self::DE ;
   
   //Keys ISO 639-1 Language Codes
   protected static $mon_days = array(
-    self::EN => array("January","February","March","April","May","June","July","August","September","October","November","December",
+    self::EN_PHP => array("January","February","March","April","May","June","July","August","September","October","November","December",
                   "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday","Sunday"),     
     self::DE => array("Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember",
                   "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag","Sonntag"),
@@ -77,9 +45,6 @@ class dt extends DateTime{
   );
   
   protected static $strictModeCreate = false;
-  
-  //dd.mm every year, E-2 Easter - 2 Days, dd.mm.yyyy fix Date
-  private static $holidayList = self::DE_HOLIDAYLIST;
   
   //protected $propContainer = null;
   private $errorInfo = "";
@@ -111,15 +76,18 @@ class dt extends DateTime{
     }
     //String and Chain of Strings
     elseif(is_string($dt)) {
-      $aDateExpr = explode('|', $dt);
-      $dtc = $this->santinizeGermanDate($aDateExpr[0]);
-      parent::__construct($dtc, $timeZone);
-      if(count($aDateExpr) > 1) {
-        array_shift($aDateExpr);  //remove first
-        foreach($aDateExpr as $dateExpr) {
-          $dateExpr = trim($dateExpr);
-          if($dateExpr === '{{easter}}') $this->setEasterDate();
-          else $this->modify($this->santinizeGermanDate($dateExpr));
+      $parts = explode('|', $dt, 2);
+      if(strpos($parts[0],"{{") !== false) {
+        //wildcards in part 0 
+        parent::__construct("now", $timeZone);
+        $this->chain($dt);
+      }
+      else {
+        $dtc = $this->santinizeGermanDate($parts[0]);
+        parent::__construct($dtc, $timeZone);
+        if(isset($parts[1])) {
+          //rest of chain
+          $this->chain($parts[1]);
         }
       }
     }
@@ -231,6 +199,44 @@ class dt extends DateTime{
     $dt->lastMatchRegEx = $match;   
     return $dt;
   }
+
+ /*
+  * Parses a time string according to a specified format
+  * $format string Format 
+  * $time string representing the time
+  * $timezone dateTimeZone object or string, defeault null for default Timezone
+  * Returns a new dt instance or FALSE on failure.
+  */
+  public static function createDtFromFormat($format, $time , $timezone = null )
+  {
+    if(is_string($timeZone)) {
+      $timeZone = new DateTimeZone($timeZone);
+    }
+    return new static(parent::createFromFormat($format, $time , $timezone));
+  }
+
+ /*
+  * create dt from a Julian Date Number
+  * $julianDateNumber float Julian Date Number (Days since 1.Jan -4712 12:00)
+  * $timezone dateTimeZone object or string, defeault null for default Timezone
+  * Returns a new dt instance or FALSE on failure.
+  */
+  public static function createFromJD($julianDateNumber, $timeZone = null )
+  {
+    if(is_string($timeZone)) {
+      $timeZone = new DateTimeZone($timeZone);
+    }
+    $jdSeconds = ((float)$julianDateNumber - 1721426) * 86400;
+    return dt::create("12:00 UTC")
+      ->setDate(1,1,1)
+      ->addSeconds($jdSeconds)
+      ->round()
+      ->setTimeZone($timeZone)
+    ;
+
+  }
+
+
   
  /*
   * clone self
@@ -239,6 +245,7 @@ class dt extends DateTime{
     $clone = clone $this;
     return $clone;
   }
+
  /*
   * return last match Array from createFromRegExFormat
   * return false, if instance not createt by createFromRegExFormat()
@@ -291,7 +298,7 @@ class dt extends DateTime{
     self::$mon_days = array_merge(self::$mon_days,$month_and_days);
     return true;
   }
-
+  
  /*
   * default_timezone_set(string $timezone)
   * alias for date_default_timezone_set()
@@ -313,13 +320,13 @@ class dt extends DateTime{
   
     $strDate = parent::format($format);
 
-    if($language != self::EN && array_key_exists($language,self::$mon_days)) {
+    if(array_key_exists($language,self::$mon_days)) {
       if(preg_match('/[lF]/',$format)) {
-        $strDate = str_replace(self::$mon_days['en'],self::$mon_days[$language],$strDate);
+        $strDate = str_replace(self::$mon_days[self::EN_PHP],self::$mon_days[$language],$strDate);
       }
       if(preg_match('/[DM]/',$format)) {
         $strDate = str_replace(
-          array_map(array('self','substr3'),self::$mon_days['en']),
+          array_map(array('self','substr3'),self::$mon_days[self::EN_PHP]),
           array_map(array('self','substr3'),self::$mon_days[$language]),
           $strDate);
       }
@@ -408,21 +415,27 @@ class dt extends DateTime{
   public function setEasterDate($flag = self::EASTER_WEST){
     parent::setTime(0,0,0);
     $year = (int)parent::format('Y');
-    if($year < 1600 or $year >= 2100){
+    $dt = self::modifyToEaster($this, $year, $flag);
+    if($dt === false) { 
       throw new Exception('Year for '.__METHOD__.' must between 1600 and 2100');
-    }      
-    if($flag == self::EASTER_WEST) {
-      parent::setDate($year,3,21);
     }
-    elseif( $flag == self::EASTER_EAST) {
-      parent::setDate($year,4,3);
-    }
-    else return false;
-    parent::modify(easter_days($year, $flag).' Days');
-    $korr = -(int) $this->format('w');
-    
-    return parent::modify($korr.' Days');
+    return $this;
   }
+
+ /*
+  * set Date to first Day of Passover
+  * 1600-1-1 < date < 2100-1-1
+  * throw exeption if error
+  */
+  public function setPassoverDate(){
+    $year = (int)parent::format('Y');
+    if($year < 1900 or $year >= 2100){
+      throw new Exception('Year for '.__METHOD__.' must between 1900 and 2100');
+    }      
+    $modifier = static::passover($year)->format("Y-m-d H:i:s");  
+    return parent::modify($modifier);
+  }
+
   
  /*
   * setTimezone(string Timezone), convert date in new Timezone
@@ -493,93 +506,22 @@ class dt extends DateTime{
     if($strDateWeek) return $strDateWeek === $this->format('o-W');
     return null;
   }  
-
- /*
-  * return true if a german holiday
-  * param $region: 2 chars for the Region
-  */  
-  public function isPublicHoliday($region = null){
-    $holidays = explode(",",self::$holidayList);
-    $year = parent::format('Y');
-    foreach($holidays as $dateRegion){
-      $aDateRegion = explode(':',$dateRegion); //15.8:BY.SL]
-      $day = trim($aDateRegion[0]);
-      $dateRegion = isset($aDateRegion[1]) ? trim($aDateRegion[1]) : "";  //"" for All
-      if(stripos($day,"e") === 0) {
-        //e+39=easterdate +39 Days
-        $date = clone $this;
-        $date->setEasterDate()->modify(substr($day,1)." Days");
-      }
-      elseif(stripos($day,"b") === 0) { 
-        //B = Buß- Bettag
-        $date = self::create("23.11.".$year)->modify("last Wed");
-      }
-      else {
-        $date = preg_match('/^\d{1,2}\.\d{1,2}$/',$day) 
-          ? date_create($day.".".$year) 
-          : date_create($day);
-      }
-      if($this->format('Y-m-d') == $date->format('Y-m-d')) { 
-        if(empty($dateRegion)) return true;  //All Regions
-        elseif(strlen($region) == 2 && stripos($dateRegion,$region) !== false) {
-          //regional Holiday 
-          return true;
-        }
-      }
-    }
-    return false;   
-  }
-
- /*
-  * set holidayList
-  * dd.mm every year, E-2 Easter - 2 Days, dd.mm.yyyy fix Date, 
-  * without list or null : set the default list (de)
-  * return true if ok, false if Error in list
-  * use detectHolidayListError() as help
-  */ 
-  public static function setHolidayList($list=null) {
-    if(empty($list)) {
-      self::$holidayList = self::DE_HOLIDAYLIST;
-    } 
-    else {
-      //validate list
-      if(self::detectHolidayListError($list)) return false;
-      self::$holidayList = $list;
-    }
-    return true;
-  }
   
  /*
-  * add a holidayList
-  * dd.mm every year, E-2 Easter - 2 Days, dd.mm.yyyy fix Date, 
-  */ 
-  public static function addHolidayList($list) {
-    if(self::detectHolidayListError($list)) return false;
-    self::$holidayList .= ",".$list;
-    return true;
-  }
-  
- /*
-  * check holidayList and get first Error Element as string
-  * return "" if list ok
-  */
-  public static function detectHolidayListError($list){
-    foreach(explode(',', $list) as $holidayEx) {
-      $regEx = '~^((\d\d?\.\d\d?(\.\d{4})?)|(E[+\-]\d*)|B)(:[a-z][a-z](\.[a-z][a-z])*)?$~i';
-      if(! preg_match($regEx, trim($holidayEx))) return $holidayEx;
-      
-    } 
-    return "";
-  }
- 
-  
- /*
-  * return Seconds after midnight as the clock shows
+  * return integer Seconds since midnight 
   */
   public function getDaySeconds() {
     $secondsDay = (parent::format('H') * 60 + parent::format('i'))*60 + parent::format('s');
     return $secondsDay;
   }
+
+ /*
+  * return integer Minutes since midnight 
+  */
+  public function getDayMinutes() {
+    return parent::format('H') * 60 + parent::format('i');
+  }
+
   
  /*
   * return numeric representation of the quarter (1..4)
@@ -608,6 +550,17 @@ class dt extends DateTime{
     return $diff->days+1;
   }
 
+ /*
+  * return float JD (Julian Date Number)
+  * Date > 0001-01-01
+  */
+  public function toJD() {
+    return self::create('12:00 UTC')
+      ->setDate(1,1,1)
+      ->diffTotal($this,"Days") + 1721426;
+  }
+  
+  
  /* 
   * cut rest
   * $Interval: number Seconds or String x Seconds, x Minutes, x Hours, 
@@ -701,7 +654,22 @@ class dt extends DateTime{
   public function round($Interval=1) {
     return $this->cut($Interval, true);
   }
-
+  
+ /*
+  * get Modulo (Rest) after cut a Intervall
+  * return integer/float
+  * param string $interval (p.E. "5 Minutes")
+  * param string $unit: Week, Day, Hour, Minute, Second, Year, Month
+  *   default $unit get from Interval
+  */
+  public function getModulo($interval, $unitP = null) {
+    if(empty($unitP)) {
+      //default Unit from interval
+      $unitP = preg_replace('/[^A-Za-z]/', '', $interval);  
+      if(empty($unitP)) $unitP = "Second";
+    }
+    return $this->copy()->cut($interval)->diffTotal($this, $unitP);
+  }
   
  /* 
   * return DateInterval object
@@ -746,10 +714,16 @@ class dt extends DateTime{
 
     $diff = $this->diff($refDate);
     if($unit == $unitList['y']) {
-      return $diff->y;
+      return $diff->invert ? -$diff->y : $diff->y;
     }
     elseif($unit == $unitList['m']){
-      return $diff->y * 12 + $diff->m;
+      //$month = $diff->y * 12 + $diff->m;
+      //return $diff->invert ? -$month : $month;
+      list($yearStart,$monthStart,$dayStart) = explode(" ",$this->format("Y m dHis"));
+      list($yearEnd,$monthEnd, $dayEnd) = explode(" ",$refDate->format("Y m dHis"));
+      $mothDiff = ($yearEnd - $yearStart) * 12 + $monthEnd - $monthStart;
+      if($dayStart > $dayEnd) --$mothDiff;
+      return $mothDiff;
     }
     else {
       $total = $diff->days;
@@ -776,7 +750,7 @@ class dt extends DateTime{
   }
   
  /*
-  * diffHuman return a difference as human readable string
+  * diffHuman return a difference as human readable string example "3 Month"
   * $date: string, objekt DateTime or int/float Timestamp
   * $language: 'de','en','auto'
   */
@@ -786,7 +760,7 @@ class dt extends DateTime{
     if($language == self::AUTO && isset($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
       $language = strtolower(substr($_SERVER['HTTP_ACCEPT_LANGUAGE'],0,2)); 
     }
-    if(!array_key_exists($language,static::$humanUnits)) $language = self::EN;
+    if(!array_key_exists($language,static::$humanUnits)) $language = self::EN_PHP;
     $units = static::$humanUnits[$language];
     
     $diff = $this->diffTotal($date);
@@ -844,19 +818,44 @@ class dt extends DateTime{
   * $para : Array with optional parameters
   */
   public function chain($chainModifier, array $para = array()) {
-    $thisDate = clone $this;
-    $replacements = array_merge($para, array(
-      '{{year}}' => parent::format('Y'),
-      '{{month}}' => parent::format('m'),
-      '{{day}}' => parent::format('d'),
-      '{{easter}}' => $thisDate->setEasterDate()->format('m/d 00:00'),
-    ));
-    
-    foreach($replacements as $key => $value){
-      $chainModifier = str_replace($key, $value, $chainModifier); 
-    }
+
     foreach(explode('|',$chainModifier) as $modifier) {
-      $this->modify($modifier);
+      if(strpos($modifier,"{{") !== false) {
+        //special modifier
+        //replace wildcards
+        $year = parent::format('Y');
+        $replacements = array_merge($para, array(
+          '{{year}}' => $year,
+          '{{month}}' => parent::format('m'),
+          '{{day}}' => parent::format('d'),
+          '{{easter}}' => self::easter($year)->format('m/d 00:00'),
+          '{{easter_o}}' => self::easter($year,self::EASTER_EAST)->format('m/d 00:00'),
+          '{{passover}}' => self::Passover($year)->format('m/d 00:00'),
+        ));
+        foreach($replacements as $key => $value){
+          $modifier = str_replace($key, $value, $modifier); 
+        }
+        //short replacements with date formats
+        if(preg_match_all('~\{\{(\w)\}\}~', $modifier, $matches, PREG_SET_ORDER)){
+          foreach($matches as $match){
+            //match[0]: {{char}} , match[1]: char
+            $modifier = str_replace($match[0], parent::format($match[1]),$modifier);
+          }
+        }
+        //condition how "{{?D=Wed}}+1 Day"
+        if(preg_match('~^\{\{\?([DdmLYI]+)(!?=)([^}]+)\}\}(.*)~',$modifier,$match)) {
+          $cmpEqual = parent::format($match[1]) == $match[3];
+          if($match[2] == "!=") $cmpEqual = !$cmpEqual;
+          if($cmpEqual) $this->modify($match[4]);
+        }
+        else {
+          $this->modify($modifier);
+        }
+        
+      }
+      else {
+        $this->modify($this->santinizeGermanDate($modifier));
+      }
     }
   
     return $this;
@@ -1317,6 +1316,60 @@ class dt extends DateTime{
     return $dt->setTimeZone($timeZone);
   }
   
+  
+ /*
+  * create Easter-Date for a given year
+  * $year : integer 
+  * $flag : dt::EASTER_WEST or dt::EASTER_EAST
+  * return dt object or false if error
+  */
+  public static function Easter($year, $flag = self::EASTER_WEST){
+    return self::modifyToEaster(static::create("today"), $year, $flag);
+  }
+  
+ /*
+  * calculate the first day of Passover (Gauß)
+  * @params: $year integer as YYYY, interval 1900 to 2099
+  */
+  public static function Passover($year){
+    $a = (12*$year+12)%19; 
+    $b = $year%4;
+    $m = 20.0955877 + 1.5542418 * $a + 0.25 * $b - 0.003177794 * $year; 
+    $mi = (int)$m;
+    $mn = $m-$mi;
+    $c = ($mi + 3 * $year + 5 * $b + 1)%7; 
+    if($c==2 OR $c==4 OR $c==6) {
+      $mi += 1;
+    } elseif($c==1 AND $a > 6 AND $mn >= (1367/2160)) {
+      $mi += 2;
+    } elseif ($c==0 AND $a > 11 AND $mn > (23269/25920)) {
+      $mi += 1;
+    }
+    return static::create($year."-3-13")->modify($mi." Days");    
+  }  
+
+ /*
+  * calculate Equinox (Äquinoktium primär)
+  * @params: $year integer as YYYY
+  * @params: string/object $timezone
+  * @return date Object
+  */
+  public static function getEquinox($year,$timeZone = null){
+    if(empty($timeZone)) {
+      $timeZone = date_default_timezone_get();
+    }
+
+    if(! $timeZone instanceof DateTimeZone) {
+      $timeZone = new DateTimeZone($timeZone);
+    }
+    
+    $date = date_create("2000-03-20 07:30", new DateTimeZone("UTC"))
+      ->modify((int)(31556925.187471 * ($year-2000))." Sec")
+      ->setTimezone($timeZone);
+    return $date;
+  }  
+  
+  
  /*
   * returns true if an error or a warning is present
   */  
@@ -1420,11 +1473,11 @@ class dt extends DateTime{
     $month = array_slice(self::$mon_days[self::$defaultLanguage],0,12);  //only month
     if(str_ireplace($month,'',$strDate) !== $strDate) {
       //full Month
-      return str_ireplace($month, self::$mon_days[self::EN],$strDate);
+      return str_ireplace($month, self::$mon_days[self::EN_PHP],$strDate);
     }
     //check short Month
     $shortMonth = array_map(array('self','substr3'),$month);
-    $shortMonthEN = array_map(array('self','substr3'),self::$mon_days[self::EN]);
+    $shortMonthEN = array_map(array('self','substr3'),self::$mon_days[self::EN_PHP]);
     if(str_ireplace($shortMonth,'',$strDate) !== $strDate) {
       return str_ireplace($shortMonth, $shortMonthEN,$strDate);
     }
@@ -1506,5 +1559,31 @@ class dt extends DateTime{
     if(empty($sel))return null;
     $sel = reset($sel);
     return $sel['time'];
+  }
+
+ /*
+  * helper for Easter-Date
+  * $dt : dt object
+  * $year : integer 
+  * $flag : dt::EASTER_WEST or dt::EASTER_EAST
+  * return dt object or false if error
+  */
+  public static function modifyToEaster(dt $dt, $year, $flag = self::EASTER_WEST) {
+    if($year < 1600 or $year >= 2100){
+      return false;
+    }
+    if($flag == self::EASTER_WEST) {
+      $basis = $year."-03-21";
+    }
+    elseif( $flag == self::EASTER_EAST) {
+      $basis = $year."-04-03";
+    }
+    else {
+      return false;
+    }
+    $dt->modify($basis)->modify(easter_days($year, $flag).' Days');
+    $korr = -(int) $dt->format('w');
+    
+    return $dt->modify($korr.' Days');
   }  
 }
