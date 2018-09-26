@@ -24,11 +24,6 @@ echo "now in New York ".dt::create('Now','America/New_York');
 //now in New York 2017-07-13 11:41:41
 
 dt::setDefaultLanguage('de');  //German
-$dateOfBirth = dt::create('16.3.1975');
-echo 'Ich bin an einem '.$dateOfBirth->formatL('l')
-  .' im '.$dateOfBirth->formatL('F').' geboren.';
-//Ich bin an einem Sonntag im März geboren.
-
 //German Input
 $Date =  dt::create("1.Mai 17");  //2017-05-01 00:00:00
 
@@ -40,6 +35,19 @@ $string = "Y2015M5D17";
 $regEx = '~^Y(?<Y>\d{4})M(?<m>\d{1,2})D(?<d>\d{1,2})$~'; 
 $date = dt::createFromRegExFormat($regEx,$string);
 echo $date; //2015-05-17 00:00:00
+```
+#### Formatting for output
+
+```php
+dt::setDefaultLanguage('de');  //German
+
+$date = dt::create("2016-12-13 08:24:38");
+echo $date;  //2016-12-13 08:24:38
+
+$dateOfBirth = dt::create('16.3.1975');
+echo 'Ich bin an einem '.$dateOfBirth->formatL('l')
+  .' im '.$dateOfBirth->formatL('F').' geboren.';
+//Ich bin an einem Sonntag im März geboren.
 ```
 
 #### Modify Date
@@ -76,6 +84,15 @@ $easterDate =  dt::create("2018-1-1")->setEasterDate(dt::EASTER_EAST);  //2018-0
 //modify with chain  1.Advent 2017: 2017-12-03
 $firstAdvent = dt::create('2017-1-1')->chain('12/25|last Sunday|-3 weeks');
 
+//modify with chain Spring Bank Holiday 2016 (United Kingdom)
+$date = dt::create('2016-1-1')->chain('Last monday of May {{year}}');  //2016-05-30
+
+//chain with conditions : if time after 12:00 next Day
+$date = dt::create('2018-09-24 10:30')->chain('{{?Hi>1200}}next weekday');  
+//2018-09-24 10:30:00  
+$date = dt::create('2018-09-24 12:30')->chain('{{?Hi>1200}}next weekday');
+//2018-09-25 10:30:00
+
 //cron
 $cronStr = "20,30 1 * * 1-5";  //mo-fr 01:20, 1:30 
 $dateTime = dt::create('2017-7-27 01:30:00'); 
@@ -98,20 +115,40 @@ echo $date; //2015-04-01 12:00:00
 //diffTotal: units Week, Day, Hour, Minute, Second, Year, Month
 $myAge = $dateOfBirth->diffTotal('today','Years');
 
-//Seconds (float) since midnight 
+//diffHuman
+$start = "Now";
+$stop = "Now +3 Hours +20 Minutes";
+$strDiff = dt::create($start)->diffHuman($stop,'en'); //"3 Hours"
+$strDiff = dt::create($start)->diffHuman($stop,'de'); //"3 Stunden"
+
+//Seconds since midnight 
+$seconds = dt::create('Now')->getDaySeconds(); 
+//or
 $nowWithMicroseconds = dt::create(microtime(true));  
 $seconds = dt::create('today')->diffTotal($nowWithMicroseconds,"Second");
 //or
 $seconds = dt::create('today')->diffTotal(microtime(true),"Second");
 
+//Minutes since midnight from a date
+$minutes = dt::create('2014-5-6 07:04:30')->getDayMinutes();  //424 = 7*60+4
+
 //relative Time to a fixed Unit
 $hours = dt::totalRelTime("1 Week 3 Days 5 Hours","h"); //245
+
+//get Julian Date Number
+$jd = dt::create('2018-06-25 03:38:25 UTC')->toJD();
+
+//get Float-Timestamp
+$timeStamp = dt::create('1716-12-24')->getMicroTime(); //-7984573200.0
 
 //Quarter
 $quarter = dt::create('2015-08-10')->getQuarter(); //3
 
 //Average between Dates 
 $date = dt::create('2015-4-1 12:00')->average('2015-4-3 04:00'); //2015-04-02 08:00:00
+
+//Rest or Modulo
+$restMinutes = dt::create('2013-12-18 03:47')->getModulo('5 Minutes');  //2
 ```
 
 #### Checks
@@ -130,9 +167,6 @@ $isInWeek = dt::create('2016-01-15')->isInWeek('2016-01-12');  //true
 
 //is 2016-04-15 in Week 34 ?
 $isInWeek = dt::create('2016-04-15')->isInWeek('2016W34');  //false
-
-//check if 3.10.2017 is a german public holiday
-$isHoliday = dt::create('03 Oct 2016')->isPublicHoliday(); //true
 
 //was in moscow in june 2015 summertime ? No
 $isSummertime = dt::create('Jun 2015','Europe/Moscow')->isSummertime();  //false
@@ -156,7 +190,9 @@ $shopOpen = [
 
 $date = dt::create('Now');
 $open = false;
-if(!$date->isPublicHoliday()){
+$holiday = new JspitHoliday('de-BY');  //Germany Bavaria
+
+if(!$holiday->isHoliday($date)){
   foreach($shopOpen as list($openClose,$cronStr)){
     $isCron = $date->isCron($cronStr);
     if($openClose == 'open') $open = $open || $isCron;

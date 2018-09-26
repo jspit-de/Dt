@@ -2,8 +2,8 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.5.1                                                          |
-|      Date: 2018-09-03                                                     |
+|   Version: 1.5.2                                                          |
+|      Date: 2018-09-25                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..17, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -821,7 +821,15 @@ class dt extends DateTime{
 
     foreach(explode('|',$chainModifier) as $modifier) {
       if(strpos($modifier,"{{") !== false) {
-        //special modifier
+        //special modifier {{ .. }}
+        if(!empty($para)) {
+          //split $para in strings and closures 
+          foreach($para as $key => $par){
+            if(is_object($par) && ($par instanceof Closure)){ 
+              $para[$key] = $par($this);
+            }
+          }
+        }
         //replace wildcards
         $year = parent::format('Y');
         $replacements = array_merge($para, array(
@@ -843,12 +851,15 @@ class dt extends DateTime{
           }
         }
         //condition how "{{?D=Wed}}+1 Day"
-        if(preg_match('~^\{\{\?([DdmLYI]+)(!?=)([^}]+)\}\}(.*)~',$modifier,$match)) {
-          $cmpEqual = parent::format($match[1]) == $match[3];
-          if($match[2] == "!=") $cmpEqual = !$cmpEqual;
-          if($cmpEqual) $this->modify($match[4]);
+        if(preg_match('~^\{\{\?([DdmLYIHis]+)(!?=|<|>)([^}]+)\}\}(.*)~',$modifier,$match)) {
+          $dateDetail = parent::format($match[1]);
+          if(($match[2] == "=" AND $dateDetail == $match[3])
+            OR ($match[2] == "!=" AND $dateDetail != $match[3])
+            OR ($match[2] == ">" AND $dateDetail > $match[3])
+            OR ($match[2] == "<" AND $dateDetail < $match[3])
+          ) $this->modify($match[4]);
         }
-        else {
+        elseif($modifier != "") {
           $this->modify($modifier);
         }
         

@@ -490,11 +490,11 @@ $t->start('getModulo: get Rest of Minutes after cut 5 Minutes');
 $result = dt::create('2013-12-18 03:47')->getModulo('5 Minutes');
 $t->checkEqual((int)$result, 2);
 
-$t->start('getModulo: get float Rest after cut 5 Minutes');
+$t->start('getModulo: get float Rest after cut 10 Minutes');
 $result = dt::create('2013-12-18 03:48:30')->getModulo('10 Minutes');
 $t->checkEqual($result, 8.5);
 
-$t->start('getModulo: get float Rest after cut 5 Minutes');
+$t->start('getModulo: get float Rest after cut 10 Minutes in Seconds');
 $result = dt::create('2013-12-18 03:48:30')->getModulo('10 Minutes',"seconds");
 $t->checkEqual((int)$result, 8 * 60 + 30);
 
@@ -883,6 +883,50 @@ $t->start('chain with userparameter');
 $para = array('{{theYear}}' => 2018);
 $date = dt::create('2000-1-1')->chain('{{theYear}}-12-24 00:00',$para);
 $t->checkEqual((string)$date, '2018-12-24 00:00:00');
+
+$t->start('chain with userfunction time 11:59');
+$para = array('{{after12fct}}' => function($dateTime){
+    return $dateTime->format("H") >= 12 ? "next Day 00:00" : "00:00";
+  });
+$date = dt::create('2018-1-1 11:59')->chain('{{after12fct}}',$para);
+$t->checkEqual((string)$date, '2018-01-01 00:00:00');
+
+$t->start('chain with userfunction time 12:00');
+$para = array('{{after12fct}}' => function($dateTime){
+    return $dateTime->format("H") >= 12 ? "next Day 00:00" : "00:00";
+  });
+$date = dt::create('2018-1-1 12:00')->chain('{{after12fct}}',$para);
+$t->checkEqual((string)$date, '2018-01-02 00:00:00');
+
+$t->start('chain with condition, add 2 days, if result is Wednesday deliver the Thursday');
+$date = dt::create('2018-09-24'); //Monday
+$date->chain('+2 Days|{{?D=Wed}}next Day');
+$t->checkEqual($date->format("l, Y-m-d"), 'Thursday, 2018-09-27');
+
+$t->start('chain with condition, add 2 days, if result is not Monday');
+$date = dt::create('2018-09-24'); //Monday
+$date->chain('{{?D!=Mon}}next Day');
+$t->checkEqual($date->format("l, Y-m-d"), 'Monday, 2018-09-24');
+
+$t->start('chain with condition, next Day if Time > 12:01:01');
+$date = dt::create('2018-09-24 12:01:02'); 
+$date->chain('{{?His>120101}}next Day 00:00');
+$t->checkEqual((string)$date, '2018-09-25 00:00:00');
+
+$t->start('chain with condition, next Day if Time > 12:01:01');
+$date = dt::create('2018-09-24 12:01:01'); 
+$date->chain('{{?His>120101}}next Day 00:00');
+$t->checkEqual((string)$date, '2018-09-24 12:01:01');
+
+$t->start('chain with condition, if Time < 12:00:00 set time to 12:00');
+$date = dt::create('2018-09-24 11:59:02'); 
+$date->chain('{{?H<12}}12:00');
+$t->checkEqual((string)$date, '2018-09-24 12:00:00');
+
+$t->start('chain with condition, if Time < 12:00:00 set time to 12:00');
+$date = dt::create('2018-09-24 12:23:45'); 
+$date->chain('{{?H<12}}12:00');
+$t->checkEqual((string)$date, '2018-09-24 12:23:45');
 
 $t->start('copy: new Instance');
 $date = dt::create('2016-1-1');
