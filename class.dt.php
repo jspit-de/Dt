@@ -2,11 +2,11 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.5.2                                                          |
-|      Date: 2018-09-25                                                     |
+|   Version: 1.6                                                            |
+|      Date: 2019-01-15                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
-| Copyright © 2014..17, Peter Junk (alias jspit). All Rights Reserved.      |
+| Copyright © 2014..19, Peter Junk (alias jspit). All Rights Reserved.      |
 ' ------------------------------------------------------------------------- '
  */
 
@@ -311,16 +311,20 @@ class dt extends DateTime{
   * returns a formatted date string
   * extends the format method of the base class
   * param $language: 'en' or 'de'
+  * throw exeption if error
   */ 
   public function formatL($format, $language = null) {
     $language = $language === null ? self::$defaultLanguage : $language;
     if($language == self::AUTO && isset($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
       $language = strtolower(substr($_SERVER['HTTP_ACCEPT_LANGUAGE'],0,2)); 
     }
-  
-    $strDate = parent::format($format);
+    
+    if($language == 'en') {
+      return parent::format($format);
+    }
 
     if(array_key_exists($language,self::$mon_days)) {
+      $strDate = parent::format($format);
       if(preg_match('/[lF]/',$format)) {
         $strDate = str_replace(self::$mon_days[self::EN_PHP],self::$mon_days[$language],$strDate);
       }
@@ -331,7 +335,35 @@ class dt extends DateTime{
           $strDate);
       }
     }
-    
+    elseif(function_exists('datefmt_create')){
+      $formatPattern = strtr($format,array(
+        'D' => '{#1}',
+        'l' => '{#2}',
+        'M' => '{#3}',
+        'F' => '{#4}',
+      ));
+      $strDate = parent::format($formatPattern);
+      $regEx = '~\{#\d\}~';
+      while(preg_match($regEx,$strDate,$match)) {
+        $IntlFormat = strtr($match[0],array(
+          '{#1}' => 'E',
+          '{#2}' => 'EEEE',
+          '{#3}' => 'MMM',
+          '{#4}' => 'MMMM',
+        ));
+
+        $fmt = datefmt_create( $language ,IntlDateFormatter::FULL, IntlDateFormatter::FULL,
+          $this->getTimezone(),IntlDateFormatter::GREGORIAN  ,$IntlFormat);
+        $replace = $fmt ? datefmt_format( $fmt ,$this) : "???";
+        $strDate = str_replace($match[0], $replace, $strDate);
+      }
+    }
+    else {
+      //default en
+      trigger_error('Language '.$language.' for '.__METHOD__.' not supported', E_USER_WARNING);
+      $strDate = parent::format($format);      
+    }
+
     return $strDate;
   }
   
