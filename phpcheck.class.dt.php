@@ -7,7 +7,10 @@ header('Content-Type: text/html; charset=UTF-8');
 
 require '../class/phpcheck.php';
 require '../class/class.debug.php';
+
 $t = new PHPcheck();  //need min 1.3.17   
+//call with ?error=1 print only errors
+$t->setOutputOnlyErrors(!empty($_GET['error']));
 
 /*
  * Tests Class 
@@ -205,17 +208,29 @@ $t->start('format with English short Weekday');
 $strDate = dt::create('2014-12-20')->formatL('D, d.m.Y','en');
 $t->checkEqual($strDate,'Sat, 20.12.2014');
 
+if(function_exists('datefmt_create')){
+  
+$t->start('IntlDateFormatter exists: language "fr"');  
+$strDate = dt::create('14.1.2015')->formatL('l, d F Y','fr');  
+$t->checkEqual($strDate,'mercredi, 14 janvier 2015');
+
+$t->start('format are IntlDateFormatter Constants');  
+$strDate = dt::create('14.1.2015')->formatL('FULL+SHORT','pl');  
+$t->checkEqual($strDate,'środa, 14 stycznia 2015 00:00');
+  
+}
+
 $t->start('Add another language');
 $frLanguage = array('fr' => 
-       array("Janvier", "Février"," Mars "," Avril ",
-       " Mai "," Juin "," Juillet "," Août ",
-       " Septembre "," Octobre "," Novembre "," Décembre ",
-       "Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", 
-       "Vendredi", "Samedi"),
+       array("janvier", "février"," mars "," avril ",
+       " mai "," juin "," juillet "," août ",
+       " septembre "," octobre "," novembre "," décembre ",
+       "lundi", "mardi", "mercredi", "jeudi", 
+       "vendredi", "samedi","dimanche"),
 );     
 dt::addLanguage($frLanguage);
-$strDate = dt::create('14.1.2015')->formatL('l, d.F Y','fr'); 
-$t->checkEqual($strDate,'Mardi, 14.Janvier 2015');
+$strDate = dt::create('14.1.2015')->formatL('l, d F Y','fr'); 
+$t->checkEqual($strDate,'mercredi, 14 janvier 2015');
 
 //setTime
 $t->start('setTime(): set the time for a date');

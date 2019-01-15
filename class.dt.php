@@ -318,12 +318,14 @@ class dt extends DateTime{
     if($language == self::AUTO && isset($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
       $language = strtolower(substr($_SERVER['HTTP_ACCEPT_LANGUAGE'],0,2)); 
     }
+    $regEx = '~^(NONE|FULL|LONG|MEDIUM|SHORT)\+(NONE|FULL|LONG|MEDIUM|SHORT)$~';
+    $formatContainIntlConst = (bool)preg_match($regEx,$format,$matchIntl);
     
-    if($language == 'en') {
+    if($language == 'en' AND !$formatContainIntlConst) {
       return parent::format($format);
     }
 
-    if(array_key_exists($language,self::$mon_days)) {
+    if(array_key_exists($language,self::$mon_days) AND !$formatContainIntlConst) {
       $strDate = parent::format($format);
       if(preg_match('/[lF]/',$format)) {
         $strDate = str_replace(self::$mon_days[self::EN_PHP],self::$mon_days[$language],$strDate);
@@ -336,30 +338,43 @@ class dt extends DateTime{
       }
     }
     elseif(function_exists('datefmt_create')){
-      $formatPattern = strtr($format,array(
-        'D' => '{#1}',
-        'l' => '{#2}',
-        'M' => '{#3}',
-        'F' => '{#4}',
-      ));
-      $strDate = parent::format($formatPattern);
-      $regEx = '~\{#\d\}~';
-      while(preg_match($regEx,$strDate,$match)) {
-        $IntlFormat = strtr($match[0],array(
-          '{#1}' => 'E',
-          '{#2}' => 'EEEE',
-          '{#3}' => 'MMM',
-          '{#4}' => 'MMMM',
+      if($formatContainIntlConst) {
+        $fmt = datefmt_create( $language ,
+          constant("IntlDateFormatter::".$matchIntl[1]), 
+          constant("IntlDateFormatter::".$matchIntl[2]),
+          $this->getTimezone(),IntlDateFormatter::GREGORIAN);
+        $strDate = datefmt_format( $fmt ,$this);
+      }
+      else {
+        $formatPattern = strtr($format,array(
+          'D' => '{#1}',
+          'l' => '{#2}',
+          'M' => '{#3}',
+          'F' => '{#4}',
         ));
+        $strDate = parent::format($formatPattern);
+        $regEx = '~\{#\d\}~';
+        while(preg_match($regEx,$strDate,$match)) {
+          $IntlFormat = strtr($match[0],array(
+            '{#1}' => 'E',
+            '{#2}' => 'EEEE',
+            '{#3}' => 'MMM',
+            '{#4}' => 'MMMM',
+          ));
 
-        $fmt = datefmt_create( $language ,IntlDateFormatter::FULL, IntlDateFormatter::FULL,
-          $this->getTimezone(),IntlDateFormatter::GREGORIAN  ,$IntlFormat);
-        $replace = $fmt ? datefmt_format( $fmt ,$this) : "???";
-        $strDate = str_replace($match[0], $replace, $strDate);
+          $fmt = datefmt_create( $language ,IntlDateFormatter::FULL, IntlDateFormatter::FULL,
+            $this->getTimezone(),IntlDateFormatter::GREGORIAN  ,$IntlFormat);
+          $replace = $fmt ? datefmt_format( $fmt ,$this) : "???";
+          $strDate = str_replace($match[0], $replace, $strDate);
+        }
       }
     }
-    else {
-      //default en
+    elseif($formatContainIntlConst) {
+      //error
+      trigger_error('Format '.$format.' for '.__METHOD__.' need IntlDateFormatter', E_USER_WARNING);
+      $strDate =  "Error";
+    }
+    else{
       trigger_error('Language '.$language.' for '.__METHOD__.' not supported', E_USER_WARNING);
       $strDate = parent::format($format);      
     }
