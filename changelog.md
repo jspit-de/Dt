@@ -1,4 +1,7 @@
 # DateTime Extension dt
+## Version 1.6 (2019-01-16)
+* formatL Method has been extended. Use IntlDateFormatter if available.
+
 ## Version 1.5.2 (2018-09-25)
 * modify chain, conditions accept !=, < and >
 * modify chain, array of user parameters accept closures 
