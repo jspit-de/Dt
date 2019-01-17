@@ -48,6 +48,15 @@ $dateOfBirth = dt::create('16.3.1975');
 echo 'Ich bin an einem '.$dateOfBirth->formatL('l')
   .' im '.$dateOfBirth->formatL('F').' geboren.';
 //Ich bin an einem Sonntag im März geboren.
+
+echo dt::create('2016-01-16')->formatL('l, d F Y','fr');
+//samedi, 16 janvier 2016
+
+echo dt::create('2016-01-16')->formatL('FULL+NONE','de_AT');
+//Samstag, 16. Jänner 2016
+
+echo dt::create('2016-01-16 13:22:45')->formatL('FULL+MEDIUM','zh_Hans_CN');
+//2016年1月16日星期六下午1:22:45
 ```
 
 #### Modify Date
