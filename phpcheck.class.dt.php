@@ -1,6 +1,6 @@
 <?php
-//last modify: 2018-08-03
-//check for class dt v1.5
+//last modify: 2019-02-06
+//check for class dt v1.64
 error_reporting(-1);
 ini_set('display_errors', 1);
 header('Content-Type: text/html; charset=UTF-8');
@@ -147,6 +147,14 @@ $t->start('2 Month after 2017-06-15 13:30, Day 5 of this Month, same Time');
 $date = dt::create("2017-06-15 13:30|+2 month|{{Y}}-{{m}}-05");
 $t->checkEqual((string)$date, "2017-08-05 13:30:00");
 
+$t->start('crate from Julian Date Number');
+$date = dt::createFromJD(2458294.65168,"UTC");
+$t->checkEqual((string)$date, "2018-06-25 03:38:25");
+
+$t->start('crate from Microsoft Timestamp');
+$date = dt::createFromMsTimestamp(43317.54,"UTC");
+$t->checkEqual((string)$date, "2018-08-05 12:57:36");
+
 //
 $t->start('Create Date from not valid String');
 $t->setErrorLevel(0);//error reporting off for this test
@@ -208,7 +216,7 @@ $t->start('format with English short Weekday');
 $strDate = dt::create('2014-12-20')->formatL('D, d.m.Y','en');
 $t->checkEqual($strDate,'Sat, 20.12.2014');
 
-if(function_exists('datefmt_create')){
+if(function_exists('datefmt_create')){ //with IntlDateFormatter
   
 $t->start('IntlDateFormatter exists: language "fr"');  
 $strDate = dt::create('14.1.2015')->formatL('l, d F Y','fr');  
@@ -217,7 +225,18 @@ $t->checkEqual($strDate,'mercredi, 14 janvier 2015');
 $t->start('format are IntlDateFormatter Constants');  
 $strDate = dt::create('14.1.2015')->formatL('FULL+SHORT','pl');  
 $t->checkEqual($strDate,'środa, 14 stycznia 2015 00:00');
-  
+ 
+$t->start('format with buddhist calendar');  
+$strDate = dt::create('14.1.2015 16:45')->formatL('FULL+SHORT','es_ES@calendar=buddhist');  
+$t->checkContains($strDate,'miércoles,14,enero,2558,BE,16:45'); 
+
+$t->start('inputs with other languages');  
+dt::setDefaultLanguage('ru');
+$date = dt::create("1 октября 1990");
+$t->check($date, $date == dt::create("1990-10-01"));
+
+//set default for checks
+dt::setDefaultLanguage('de');
 }
 
 $t->start('Add another language');

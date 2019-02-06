@@ -1,4 +1,7 @@
 # DateTime Extension dt
+## Version 1.64 (2019-02-06)
+* Add Method createFromMsTimestamp : creates from Microsoft Timestamp
+
 ## Version 1.6 (2019-01-16)
 * formatL Method has been extended. Use IntlDateFormatter if available.
 

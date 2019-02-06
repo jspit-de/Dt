@@ -2,8 +2,8 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.6                                                            |
-|      Date: 2019-01-15                                                     |
+|   Version: 1.64                                                           |
+|      Date: 2019-02-06                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..19, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -11,8 +11,7 @@
  */
 
 class dt extends DateTime{
-
-  const AUTO = 'auto';  //detect from 'HTTP_ACCEPT_LANGUAGE'
+  
   const EN_PHP = 'en_php';
   const EN = 'en';
   const DE = 'de';
@@ -83,7 +82,7 @@ class dt extends DateTime{
         $this->chain($dt);
       }
       else {
-        $dtc = $this->santinizeGermanDate($parts[0]);
+        $dtc = $this->santinizeDate($parts[0]);
         parent::__construct($dtc, $timeZone);
         if(isset($parts[1])) {
           //rest of chain
@@ -236,6 +235,17 @@ class dt extends DateTime{
 
   }
 
+ /*
+  * create dt from a Microsoft Timestamp (days since Dec 31 1899)
+  * @param float/Integer timestamp Microsoft Timestamp days since Dec 31 1899
+  * @param timezone dateTimeZone object or string, defeault null for default Timezone
+  * @return new dt instance or FALSE on failure
+  */
+  public static function createFromMsTimestamp($timestamp, $timeZone = null )
+  {
+    $unixTs = ($timestamp - 25569) * 86400;
+    return self::create($unixTs, $timeZone);
+  }
 
   
  /*
@@ -268,9 +278,14 @@ class dt extends DateTime{
   * return: true ok, false if Error with a E_USER_WARNING  
   */ 
   public static function setDefaultLanguage($defaultLanguage = self::DE) {
-    if(array_key_exists($defaultLanguage,self::$mon_days) or $defaultLanguage == self::AUTO) {
+    if(array_key_exists($defaultLanguage,self::$mon_days) or $defaultLanguage == self::EN) {
       self::$defaultLanguage = $defaultLanguage;
       return true;
+    }
+    elseif(($langConfig = self::createLanguageConfig($defaultLanguage))){
+      $addOk = self::addLanguage($langConfig);
+      if($addOk) self::$defaultLanguage = $defaultLanguage;
+      return $addOk;      
     }
     else {
       trigger_error('Unknown Parameter "'.$defaultLanguage.'" for '.__METHOD__, E_USER_WARNING);
@@ -292,7 +307,7 @@ class dt extends DateTime{
   * example array: ['fr' => ["Janvier",..,"Décembre","Dimanche" ..]]
   */ 
   public static function addLanguage(array $month_and_days) {
-    if(array_key_exists('en',$month_and_days)) {
+    if(array_key_exists('en_php',$month_and_days)) {
       return false;
     }
     self::$mon_days = array_merge(self::$mon_days,$month_and_days);
@@ -315,9 +330,6 @@ class dt extends DateTime{
   */ 
   public function formatL($format, $language = null) {
     $language = $language === null ? self::$defaultLanguage : $language;
-    if($language == self::AUTO && isset($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
-      $language = strtolower(substr($_SERVER['HTTP_ACCEPT_LANGUAGE'],0,2)); 
-    }
     $regEx = '~^(NONE|FULL|LONG|MEDIUM|SHORT)\+(NONE|FULL|LONG|MEDIUM|SHORT)$~';
     $formatContainIntlConst = (bool)preg_match($regEx,$format,$matchIntl);
     
@@ -338,11 +350,18 @@ class dt extends DateTime{
       }
     }
     elseif(function_exists('datefmt_create')){
+      //check calendar in $language
+      $calType = (stripos($language,"@calendar") > 0 
+        AND stripos($language,"gregorian") === false)
+        ? IntlDateFormatter::TRADITIONAL
+        : IntlDateFormatter::GREGORIAN;
+        
       if($formatContainIntlConst) {
         $fmt = datefmt_create( $language ,
           constant("IntlDateFormatter::".$matchIntl[1]), 
           constant("IntlDateFormatter::".$matchIntl[2]),
-          $this->getTimezone(),IntlDateFormatter::GREGORIAN);
+          $this->getTimezone(),
+          $calType);
         $strDate = datefmt_format( $fmt ,$this);
       }
       else {
@@ -363,7 +382,7 @@ class dt extends DateTime{
           ));
 
           $fmt = datefmt_create( $language ,IntlDateFormatter::FULL, IntlDateFormatter::FULL,
-            $this->getTimezone(),IntlDateFormatter::GREGORIAN  ,$IntlFormat);
+            $this->getTimezone(),$calType ,$IntlFormat);
           $replace = $fmt ? datefmt_format( $fmt ,$this) : "???";
           $strDate = str_replace($match[0], $replace, $strDate);
         }
@@ -799,14 +818,11 @@ class dt extends DateTime{
  /*
   * diffHuman return a difference as human readable string example "3 Month"
   * $date: string, objekt DateTime or int/float Timestamp
-  * $language: 'de','en','auto'
+  * $language: 'de','en'
   */
   public function diffHuman($date=null, $language = null) {
     //language handling
     $language = $language === null ? self::$defaultLanguage : $language;
-    if($language == self::AUTO && isset($_SERVER['HTTP_ACCEPT_LANGUAGE'])) {
-      $language = strtolower(substr($_SERVER['HTTP_ACCEPT_LANGUAGE'],0,2)); 
-    }
     if(!array_key_exists($language,static::$humanUnits)) $language = self::EN_PHP;
     $units = static::$humanUnits[$language];
     
@@ -912,7 +928,7 @@ class dt extends DateTime{
         
       }
       else {
-        $this->modify($this->santinizeGermanDate($modifier));
+        $this->modify($this->santinizeDate($modifier));
       }
     }
   
@@ -1490,6 +1506,43 @@ class dt extends DateTime{
     }
     return false;
   }
+  
+ /*
+  * create array for language translation
+  * @param $locale string language 'fr','it'..
+  * @return array with config or false if error
+  */
+  public static function createLanguageConfig($locale = "de")
+  {
+    if(!function_exists('datefmt_create')) return false; 
+  
+    $namesMonthDays = array();
+    
+    $intlDateFormatter = new intlDateFormatter($locale,
+      IntlDateFormatter::FULL,IntlDateFormatter::NONE,NULL,NULL,
+      "MMMM"
+    );
+    //check locale
+    if(stripos($locale,$intlDateFormatter->getLocale()) === false){
+      return false;
+    }
+    $refDate = date_create("2000-01-01");
+    for($i=0;$i<12;$i++){
+      $namesMonthDays[] = $intlDateFormatter->format($refDate);
+      $refDate->modify("+1 Month");      
+    }        
+    $intlDateFormatter = new intlDateFormatter($locale,
+      IntlDateFormatter::FULL,IntlDateFormatter::NONE,NULL,NULL,
+      "EEEE"
+    );
+    $refDate->modify("next Monday");
+    for($i=0;$i<7;$i++){
+      $namesMonthDays[] = $intlDateFormatter->format($refDate);
+      $refDate->modify("+1 Day");      
+    }        
+    
+    return array($locale => $namesMonthDays);
+  }
     
  /*
   * private
@@ -1507,20 +1560,28 @@ class dt extends DateTime{
     return $this;
   }
   
-  private function santinizeGermanDate($dt) {
-    // German notation 13.2 -> 13.2.YYYY
+  private function santinizeDate($dt) {
     $dt = trim($dt);
-    if(preg_match('/^[0-9]{1,2}\.[0-9]{1,2}\.?$/',$dt)) {
-      $dt = rtrim($dt,'.') . date_create('')->format('.Y');
+    if(stripos(self::$defaultLanguage,self::DE) === 0) {
+      // German notation 13.2 -> 13.2.YYYY
+      if(preg_match('/^[0-9]{1,2}\.[0-9]{1,2}\.?$/',$dt)) {
+        $dt = rtrim($dt,'.') . date_create('')->format('.Y');
+      }
+      // German notation 13.2.15 -> 13.2.YYYY
+      elseif(preg_match('/^([0-9]{1,2}\.[0-9]{1,2}\.)([0-9]{2})([^0-9][:0-9]+|$)/',$dt,$match)){
+        $dt = $match[1].($match[2] < self::DATE2000Z2 ? '20' : '19').$match[2].$match[3];
+      }
     }
-    // German notation 13.2.15 -> 13.2.YYYY
-    elseif(preg_match('/^([0-9]{1,2}\.[0-9]{1,2}\.)([0-9]{2})([^0-9][:0-9]+|$)/',$dt,$match)){
-      $dt = $match[1].($match[2] < self::DATE2000Z2 ? '20' : '19').$match[2].$match[3];
-    }
-    else {
+    //translate if not en
+    if(stripos(self::$defaultLanguage,self::EN) === false) {
       //no EN notation  27. Mai 2015 -> 27. May 2015
       $dtTrans = $this->translateMonth($dt);
-      if($dtTrans !== false) $dt = $dtTrans;
+      if($dtTrans !== false) {
+        $dt = preg_replace('~[a-z]+|[0-9]+~iu',' $0 ',$dtTrans);  //insert space between 7dec
+        $dt = trim($dt);
+        $dt = preg_replace('~\b[^0-9]{1,2}( |$)~u'," ",$dt); //remove needless chars
+        $dt = preg_replace('~^(\d{4} )(.+)$~u',"$2 $1",$dt);  //move YYYY to end
+      }
     }
     return $dt;
   }
