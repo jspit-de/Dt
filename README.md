@@ -216,6 +216,10 @@ echo $date.' : '.($open ? 'Open' : 'Close');
 
 http://jspit.de/check/phpcheck.class.dt.php
 
+### Documentation
+
+http://jspit.de/tools/classdoc.php?class=dt
+
 ### Requirements
 
 - PHP 5.3.8+
