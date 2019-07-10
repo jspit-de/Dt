@@ -3,7 +3,7 @@
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
 |   Version: 1.67                                                           |
-|      Date: 2019-07-09                                                     |
+|      Date: 2019-07-10                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..19, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -119,10 +119,10 @@ class dt extends DateTime{
   */ 
   public static function create(/* args */) {
     $args = func_get_args();
-    $dt = isset($args[0]) ? $args[0] : null;
+    $dt = array_key_exists(0,$args) ? $args[0] : null;
     $timeZone = null;
     //timezone set ?
-    if(isset($args[1])) {
+    if(array_key_exists(1,$args)) {
       $lastArg = array_pop($args);
       if(is_string($lastArg)){
         $timeZone = new DateTimeZone($lastArg);
@@ -134,7 +134,8 @@ class dt extends DateTime{
       else {
         $timeZone = $lastArg; 
       }
-      if((is_int($args[0]) AND is_int($args[1])) OR count($args) > 2) {
+      
+      if(count($args) > 1) {
         //args year,month,..
         $args += array(2019,1,1,0,0,0,0); //+defaults
         $now = explode(" ",date("Y n j H i s u"));
@@ -1445,7 +1446,7 @@ class dt extends DateTime{
   }
   
  /*
-  * calculate the first day of Passover (Gauß)
+  * calculate the first full day of Passover (Gauß)
   * @params: $year integer as YYYY, interval 1900 to 2099
   */
   public static function Passover($year){
