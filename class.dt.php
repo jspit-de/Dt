@@ -2,8 +2,8 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.64                                                           |
-|      Date: 2019-02-06                                                     |
+|   Version: 1.67                                                           |
+|      Date: 2019-07-09                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..19, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -26,7 +26,8 @@ class dt extends DateTime{
   const PAGE_ENCODING = 'UTF-8';
   
   protected static $defaultLanguage = self::DE ;
-  
+
+  //https://www.uebersetzungen.in/sprachkuerzel-nach-iso_639-1/  
   //Keys ISO 639-1 Language Codes
   protected static $mon_days = array(
     self::EN_PHP => array("January","February","March","April","May","June","July","August","September","October","November","December",
@@ -55,14 +56,14 @@ class dt extends DateTime{
   * $dt: string or int/float timestamp or dt-object or DateTime-Object 
   * $timeZone. string or DateTimeZone.Object
   */ 
-  public function __construct($dt=null, $timeZone = null){
+  public function __construct($dt = null, $timeZone = null){
     //TimeZone
     if(is_string($timeZone)) {
       $timeZone = new DateTimeZone($timeZone);
     }
     
     //DateTime object
-    if($dt instanceof DateTime) {
+    if($dt instanceof DateTime or $dt instanceof DateTimeImmutable) {
       if($timeZone === null) {
         $timeZone = $dt->getTimezone();
       }      
@@ -71,7 +72,7 @@ class dt extends DateTime{
     
     //null
     elseif($dt === null) {
-      parent::__construct($dt, $timeZone);
+      parent::__construct("now", $timeZone);
     }
     //String and Chain of Strings
     elseif(is_string($dt)) {
@@ -112,10 +113,38 @@ class dt extends DateTime{
   
  /*
   * function returns a new dt-object or Bool false if Error
-  * $dt: string or dt-object or DateTime-Object
-  * $timeZone. string or DateTimeZone.Object
+  * first Arg: string or dt-object or DateTime-Object or float-Timestamp or int
+  * second Arg: 
+  * last Arg: optional $timeZone as string or DateTimeZone.Object
   */ 
-  public static function create($dt = null, $timeZone = null) {
+  public static function create(/* args */) {
+    $args = func_get_args();
+    $dt = isset($args[0]) ? $args[0] : null;
+    $timeZone = null;
+    //timezone set ?
+    if(isset($args[1])) {
+      $lastArg = array_pop($args);
+      if(is_string($lastArg)){
+        $timeZone = new DateTimeZone($lastArg);
+      }
+      elseif(is_int($lastArg)){
+        //lastArg back
+        array_push($args, $lastArg);
+      }
+      else {
+        $timeZone = $lastArg; 
+      }
+      if((is_int($args[0]) AND is_int($args[1])) OR count($args) > 2) {
+        //args year,month,..
+        $args += array(2019,1,1,0,0,0,0); //+defaults
+        $now = explode(" ",date("Y n j H i s u"));
+        for($i=0; $i < 7; $i++){
+          if($args[$i] === null) $args[$i] = (int)$now[$i]; 
+        }
+        $dt = vsprintf('%d-%d-%d %d:%d:%d.%06d',$args);
+      }
+    }
+    
     try{
       $dateTime = new static($dt,$timeZone);
     }
@@ -238,13 +267,22 @@ class dt extends DateTime{
  /*
   * create dt from a Microsoft Timestamp (days since Dec 31 1899)
   * @param float/Integer timestamp Microsoft Timestamp days since Dec 31 1899
-  * @param timezone dateTimeZone object or string, defeault null for default Timezone
+  * @param timezone dateTimeZone object or string, defeault is "UTC" , null for default Timezone
   * @return new dt instance or FALSE on failure
   */
-  public static function createFromMsTimestamp($timestamp, $timeZone = null )
+  public static function createFromMsTimestamp($timestamp, $timeZone = "UTC" )
   {
-    $unixTs = ($timestamp - 25569) * 86400;
+    $unixTs = round(($timestamp - 25569) * 86400, 3);  //ms
     return self::create($unixTs, $timeZone);
+  }
+
+ /*
+  * get a Microsoft Timestamp (days since Dec 31 1899)
+  * @return float (days since Dec 31 1899)
+  */
+  public function getMsTimestamp()
+  {
+    return $this->getMicroTime()/86400 + 25569;
   }
 
   
@@ -252,8 +290,7 @@ class dt extends DateTime{
   * clone self
   */
   public function copy(){
-    $clone = clone $this;
-    return $clone;
+    return clone $this;
   }
 
  /*
@@ -775,8 +812,6 @@ class dt extends DateTime{
       trigger_error('First Parameter for '.__METHOD__.' is not a valid Date', E_USER_WARNING);
       return false;
     }
-    //micro Sec
-    $microSec = (float)('0.'.$refDate->format('u')) - (float)('0.'.$this->format('u'));
 
     $diff = $this->diff($refDate);
     if($unit == $unitList['y']) {
@@ -798,12 +833,20 @@ class dt extends DateTime{
         $total = $diff->d;
       }
     }
-    
     $total = $total * 24 + $diff->h;
     $total = $total * 60 + $diff->i;
     $total = $total * 60 + $diff->s;
+    //micro Sec
+    if(isset($diff->f)) {
+      $total += $diff->f;
+      $microSec = 0.0;
+    }
+    else {
+      $microSec = (float)('0.'.$refDate->format('u')) - (float)('0.'.$this->format('u')); 
+      $total +=  $diff->invert ? -$microSec : $microSec;    
+    }
     $total = $diff->invert ? -$total : $total;
-    if($microSec != 0.0) $total += $microSec; 
+    //$total += $microSec; 
     if($unit == $unitList['s']) return $total;
     $total /= 60;
     if($unit == $unitList['i']) return $total;
@@ -1121,7 +1164,7 @@ class dt extends DateTime{
   * 2014-1-31 + 1 Month -> 2014-02-28
   * 2014-3-30 - 1 Month -> 2014-02-28  
   */  
-  public function addMonthCut($month) {
+  public function addMonthCut($month = 1) {
     $dateAdd = clone $this;
     $dateLast = clone $this;
     $strAdd = '+'.(int)$month.' Month';
@@ -1507,6 +1550,18 @@ class dt extends DateTime{
     return false;
   }
   
+  /**
+   * Returns the list of properties to dump on serialize() called on.
+   *
+   * @return array
+   */
+  public function __sleep()
+  {
+    return array('date', 'timezone_type', 'timezone');
+  }
+
+
+  
  /*
   * create array for language translation
   * @param $locale string language 'fr','it'..
@@ -1577,9 +1632,8 @@ class dt extends DateTime{
       //no EN notation  27. Mai 2015 -> 27. May 2015
       $dtTrans = $this->translateMonth($dt);
       if($dtTrans !== false) {
-        $dt = preg_replace('~[a-z]+|[0-9]+~iu',' $0 ',$dtTrans);  //insert space between 7dec
-        $dt = trim($dt);
-        $dt = preg_replace('~\b[^0-9]{1,2}( |$)~u'," ",$dt); //remove needless chars
+        $dt = preg_replace('~\b[^0-9]{1,2}( |$)~u'," ",$dtTrans); //remove needless chars
+        $dt = preg_replace('/[[:^print:]]/', ' ', $dt); 
         $dt = preg_replace('~^(\d{4} )(.+)$~u',"$2 $1",$dt);  //move YYYY to end
       }
     }

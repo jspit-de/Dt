@@ -1,4 +1,16 @@
 # DateTime Extension dt
+
+## Version 1.67 (2019-07-09)
+* Create also from int arguments year, month, day..
+* Add Method __sleep()
+
+## Version 1.66 (2019-07-04)
+* Create also from DateTimeImmutable
+
+## Version 1.65 (2019-02-07)
+* Add Method getMsTimestamp : get a Microsoft Timestamp (days since Dec 31 1899)
+* modify Method diffTotal (use now dateInterval->f)
+
 ## Version 1.64 (2019-02-06)
 * Add Method createFromMsTimestamp : creates from Microsoft Timestamp
 

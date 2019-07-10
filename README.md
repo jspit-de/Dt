@@ -1,14 +1,18 @@
 # dt 
 
-PHP extension for DateTime.
+PHP extension for DateTime API.
 
 ### Features
 
-- Create dt-objects from strings, float/int timestamps or object
-- German and English for input and output,
-  other languages can be added
+- Create dt-objects from strings, timestamps( float/int/Microsoft),
+  Julian Date Number, DateTime-Objects 
+- Pipe constructs for multiple modifiers
+- Supports many languages for output and input
+- Crontab Expressions
 - Supports microseconds
+- Calculate dates for catholic and orthodox Easter and Passover
 - All methods of DateTime can still be used
+- One file, PHP 5.3.8 .. 7.x, no external requirements
 
 ### Usage
 
@@ -23,9 +27,20 @@ echo "now is ".(new dt);
 echo "now in New York ".dt::create('Now','America/New_York');
 //now in New York 2017-07-13 11:41:41
 
+//use wildcads for create
+$dateObj = dt::create("{{year}}-{{month}}-15 00:00");  //Day 15 this Month time 00:00
+$dateObj = dt::create("{{year}}-{{month}}-15");  //Day 15 this Month current time
+
+//Equivalent code with DateTime
+//$dateObj = new DateTime(date("Y-m")."-15 ".(new DateTime)->format("H:i:s.u"));
+
 dt::setDefaultLanguage('de');  //German
 //German Input
 $Date =  dt::create("1.Mai 17");  //2017-05-01 00:00:00
+
+dt::setDefaultLanguage('ru');
+$date = dt::create("1 октября 1990");
+echo $date->format("l, j F Y"); //﻿Monday, 1 October 1990
 
 //create dt from float timestamp : 2017-07-31 13:47:02.250000
 echo dt::create(1501501622.25)->toStringWithMicro();
@@ -212,14 +227,15 @@ if(!$holiday->isHoliday($date)){
 echo $date.' : '.($open ? 'Open' : 'Close');
 ```
 
-### Demo and Test
-
-http://jspit.de/check/phpcheck.class.dt.php
-
 ### Documentation
 
 http://jspit.de/tools/classdoc.php?class=dt
 
+### Demo and Test
+
+http://jspit.de/check/phpcheck.class.dt.php
+
 ### Requirements
 
 - PHP 5.3.8+
+- IntlDateFormatter class for full language support
