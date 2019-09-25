@@ -173,6 +173,11 @@ $date = dt::create('2015-4-1 12:00')->average('2015-4-3 04:00'); //2015-04-02 08
 
 //Rest or Modulo
 $restMinutes = dt::create('2013-12-18 03:47')->getModulo('5 Minutes');  //2
+
+//get count of specific weekday between dates
+//example: how many Sundays does June 2019 have?
+$sundaysJun2019 = dt::create('1 Jun 2019')->countDaysTo('Sun','30 Jun 2019'); //5
+
 ```
 
 #### Checks

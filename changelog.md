@@ -1,5 +1,14 @@
 # DateTime Extension dt
 
+## Version 1.73 (2019-09-25)
+* Add Method createFromIntlFormat
+* Add Method timeStampFromIntlFormat
+* Add Method formatIntl
+* Add Method countDaysTo
+
+## Version 1.7 (2019-07-17)
+* Handle cron-tab-strings in chains
+
 ## Version 1.67 (2019-07-09)
 * Create also from int arguments year, month, day..
 * Add Method __sleep()

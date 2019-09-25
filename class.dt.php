@@ -2,8 +2,8 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.67                                                           |
-|      Date: 2019-07-10                                                     |
+|   Version: 1.73                                                           |
+|      Date: 2019-09-24                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..19, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -64,10 +64,10 @@ class dt extends DateTime{
     
     //DateTime object
     if($dt instanceof DateTime or $dt instanceof DateTimeImmutable) {
-      if($timeZone === null) {
-        $timeZone = $dt->getTimezone();
+      parent::__construct($dt->format('Y-m-d H:i:s.u'), $dt->getTimezone());
+      if($timeZone instanceOf DateTimeZone) {
+        parent::setTimeZone($timeZone);
       }      
-      parent::__construct($dt->format('Y-m-d H:i:s.u'), $timeZone);
     }
     
     //null
@@ -245,6 +245,76 @@ class dt extends DateTime{
   }
 
  /*
+  * Parses a date-time string according to a specified Intl format
+  * $format string Format 
+  * $strDateTime string representing the time
+  * $timeZone dateTimeZone object or string, defeault null for default Timezone
+  * $language string locale-info
+  * Returns a new dt instance or FALSE on failure.
+  */
+  public static function createFromIntlFormat($format, $strDateTime , $timeZone = null, $language = null)
+  {
+    if(!function_exists('datefmt_create')) {
+      throw new Exception(__METHOD__.' need the IntlDateFormatter');
+    }
+    $timeStamp = self::timeStampFromIntlFormat($format, $strDateTime , $timeZone, $language);
+    if($timeStamp !== false) {
+      return self::create($timeStamp, $timeZone);    
+    }
+    //error
+    trigger_error(
+      'Error Method '.__METHOD__.': parse Error "'.$strDateTime.'" format "'.$format.'"',
+      E_USER_WARNING
+    );
+    return false;
+  }    
+  
+ /*
+  * Parses a date-time string according to a specified Intl format
+  * $format string Format 
+  * $strDateTime string representing the time
+  * $timeZone dateTimeZone object or string, defeault null for default Timezone
+  * $language string locale-info
+  * Returns a timestamp or FALSE on failure.
+  */
+  public static function timeStampFromIntlFormat($format, $strDateTime , $timeZone = null, $language = null)
+  {
+    if(!function_exists('datefmt_create')) {
+      throw new Exception(__METHOD__.' need the IntlDateFormatter');
+    }
+
+    if($timeZone === null) {
+        $timeZone = new DateTimeZone(date_default_timezone_get());
+    }
+    elseif(is_string($timeZone)) {
+      $timeZone = new DateTimeZone($timeZone);
+    }
+    
+    if($language === null) $language = self::$defaultLanguage;
+    //check calendar in $language
+    $calType = (stripos($language,"@calendar") > 0 
+      AND stripos($language,"gregorian") === false)
+      ? IntlDateFormatter::TRADITIONAL
+      : IntlDateFormatter::GREGORIAN;
+      
+    //format analysis
+    $dateType = $timeType = IntlDateFormatter::FULL;
+    $regEx = '~^(NONE|FULL|LONG|MEDIUM|SHORT)\+(NONE|FULL|LONG|MEDIUM|SHORT)$~';
+    if(preg_match($regEx,$format,$matchIntl)){
+      //format contain intl constants
+      $dateType = constant("IntlDateFormatter::".$matchIntl[1]);
+      $timeType = constant("IntlDateFormatter::".$matchIntl[2]);
+      $format = NULL;
+    }
+    $fmt = new IntlDateFormatter($language, $dateType, $timeType, $timeZone, $calType, $format);
+    $timeStamp = $fmt->parse($strDateTime);
+   
+    return $timeStamp;
+  }
+  
+  
+
+ /*
   * create dt from a Julian Date Number
   * $julianDateNumber float Julian Date Number (Days since 1.Jan -4712 12:00)
   * $timezone dateTimeZone object or string, defeault null for default Timezone
@@ -362,9 +432,8 @@ class dt extends DateTime{
   
  /*
   * returns a formatted date string
-  * extends the format method of the base class
   * param $language: 'en' or 'de'
-  * throw exeption if error
+  * throw warnings
   */ 
   public function formatL($format, $language = null) {
     $language = $language === null ? self::$defaultLanguage : $language;
@@ -402,6 +471,15 @@ class dt extends DateTime{
           $calType);
         $strDate = datefmt_format( $fmt ,$this);
       }
+      elseif($calType === IntlDateFormatter::TRADITIONAL){
+        $fmt = datefmt_create( $language ,
+          IntlDateFormatter::FULL, 
+          IntlDateFormatter::FULL,
+          $this->getTimezone(),
+          $calType,
+          $format);
+        $strDate = datefmt_format( $fmt ,$this);
+      }
       else {
         $formatPattern = strtr($format,array(
           'D' => '{#1}',
@@ -437,6 +515,32 @@ class dt extends DateTime{
     }
 
     return $strDate;
+  }
+  
+ /*
+  * returns a formatted date string
+  * @param string $format: Intl ICU format
+  * @param string $language: en, de_AT, 
+  * throw exeption if error
+  */ 
+  public function formatIntl($format = null, $language = null) {
+    if(!function_exists('datefmt_create')) {
+      throw new Exception(__METHOD__.' need the IntlDateFormatter');
+    }
+    $language = $language === null ? self::$defaultLanguage : $language;
+    //check calendar in $language
+    $calType = (stripos($language,"@calendar") > 0 
+      AND stripos($language,"gregorian") === false)
+      ? IntlDateFormatter::TRADITIONAL
+      : IntlDateFormatter::GREGORIAN;
+      
+    $intlFormatter = datefmt_create( $language ,
+          IntlDateFormatter::FULL, 
+          IntlDateFormatter::FULL,
+          $this->getTimezone(),
+          $calType,
+          $format);
+    return datefmt_format($intlFormatter ,$this);
   }
   
  /*
@@ -918,6 +1022,62 @@ class dt extends DateTime{
     }
     return (float)$diffUTC;
   }
+
+ /*
+  * get count of speciific weekday between dates
+  * @param mixed $day (int 0=Sun .. 6 =Sat or string 'Sun','Mon'..'Sat'
+  *  or rel.DateString or DateString
+  * @param mixed $dateTo: string, timestamp or object
+  * @param bool $excludeDateTo exclude the top Date
+  * $return int, bool false if error
+  */
+  public function countDaysTo($dayIdent, $dateTo, $excludeDateTo = false){
+    if(is_int($dayIdent)) {
+      $day = (int)$dayIdent;
+    }
+    elseif(is_string($dayIdent)) {
+      $wDate = date_create($dayIdent);
+      $day = $wDate ? (int)($wDate->format('w')) : false;
+    }
+    else {
+      $day = false;
+    }
+    if($day < 0 or $day > 6 or $day === false) {
+       trigger_error(
+        'Error Method '.__METHOD__.', invalid Parameter $dayIdent in '. self::backtraceFileLine(),
+        E_USER_WARNING
+      );
+      return false;
+    }
+    $start = $this->copy()->setTime(0,0,0);
+    $dateTo = self::create($dateTo);
+    if($dateTo === false) {
+      trigger_error(
+        'Error Method '.__METHOD__.', invalid Parameter $dateTo in '. self::backtraceFileLine(),
+        E_USER_WARNING
+      );
+      return false;
+    }
+    //dateTo < start ?
+    $minus = false;
+    if($dateTo < $start) {
+      $minus = true;
+      $dTmp = $start;
+      $start = $dateTo;
+      $dateTo = $dTmp;
+    }
+    if($excludeDateTo) $dateTo->modify('-1 Day');
+    $wStart = $start->format('w');
+    $wEnd = $dateTo->format('w');
+    $fullWeeks = (int)($start->diff($dateTo)->days/7);
+    //partial count
+        //get partial week day count
+    if($wStart < $wEnd) $partialCount = ($day >= $wStart && $day <= $wEnd);
+    elseif($wStart == $wEnd) $partialCount = $wStart == $day;
+    else $partialCount = ($day >= $wStart || $day <= $wEnd);
+    $dayCount = $partialCount + $fullWeeks;
+    return $minus ? -$dayCount : $dayCount;
+  }
   
  /* 
   * modify with a chain of modifier separated with |
@@ -925,7 +1085,6 @@ class dt extends DateTime{
   * $para : Array with optional parameters
   */
   public function chain($chainModifier, array $para = array()) {
-
     foreach(explode('|',$chainModifier) as $modifier) {
       if(strpos($modifier,"{{") !== false) {
         //special modifier {{ .. }}
@@ -970,6 +1129,10 @@ class dt extends DateTime{
           $this->modify($modifier);
         }
         
+      }
+      elseif(preg_match('~^([0-9\-/*,]+ ){5}$~',$modifier.' ')){
+        //ident Cron-Tab-String how "15 1 * * *" 
+        $this->nextCron($modifier);
       }
       else {
         $this->modify($this->santinizeDate($modifier));
@@ -1548,6 +1711,13 @@ class dt extends DateTime{
     if(isset($identifier[$name])) { 
       return (int) $this->format($identifier[$name]);
     }
+    if($name == 'tzName') {
+      return $this->getTimezone()->getName();
+    }
+    if($name == 'tzType') {
+      $jsObj = json_decode(json_encode($this));
+      return $jsObj->timezone_type;     
+    }
     return false;
   }
   
@@ -1574,8 +1744,14 @@ class dt extends DateTime{
   
     $namesMonthDays = array();
     
+    //check calendar in $language
+    $calType = (stripos($locale,"@calendar") > 0 
+      AND stripos($locale,"gregorian") === false)
+        ? IntlDateFormatter::TRADITIONAL
+        : IntlDateFormatter::GREGORIAN;
+    
     $intlDateFormatter = new intlDateFormatter($locale,
-      IntlDateFormatter::FULL,IntlDateFormatter::NONE,NULL,NULL,
+      IntlDateFormatter::FULL,IntlDateFormatter::NONE,NULL,$calType,
       "MMMM"
     );
     //check locale
@@ -1588,7 +1764,7 @@ class dt extends DateTime{
       $refDate->modify("+1 Month");      
     }        
     $intlDateFormatter = new intlDateFormatter($locale,
-      IntlDateFormatter::FULL,IntlDateFormatter::NONE,NULL,NULL,
+      IntlDateFormatter::FULL,IntlDateFormatter::NONE,NULL,$calType,
       "EEEE"
     );
     $refDate->modify("next Monday");
@@ -1629,7 +1805,7 @@ class dt extends DateTime{
       }
     }
     //translate if not en
-    if(stripos(self::$defaultLanguage,self::EN) === false) {
+    if(stripos(self::$defaultLanguage,self::EN) !== 0) {
       //no EN notation  27. Mai 2015 -> 27. May 2015
       $dtTrans = $this->translateMonth($dt);
       if($dtTrans !== false) {
@@ -1643,7 +1819,7 @@ class dt extends DateTime{
   
   //tauscht Monat von defaultLanguage aus String -> Eng.
   //return string wenn ok, sonst false
-  private static function translateMonth($strDate){
+  public static function translateMonth($strDate){
     $month = array_slice(self::$mon_days[self::$defaultLanguage],0,12);  //only month
     if(str_ireplace($month,'',$strDate) !== $strDate) {
       //full Month
