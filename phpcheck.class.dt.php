@@ -1,6 +1,6 @@
 <?php
-//last modify: 2019-02-06
-//check for class dt v1.64
+//last modify: 2019-08-19
+//check for class dt v1.7
 error_reporting(-1);
 ini_set('display_errors', 1);
 header('Content-Type: text/html; charset=UTF-8');
@@ -17,10 +17,10 @@ $t->setOutputOnlyErrors(!empty($_GET['error']));
  */
 require '../class/class.dt.php';
 
-//version 1.4.21
-$t->start('exist versions info');
+//für class.dt.php ab version 1.73
+$t->start('check class version');
 $info = $t->getClassVersion("dt");
-$t->check($info, !empty($info));
+$t->check($info, !empty($info) AND $info >= 1.73);
 
 $t->start('set default Timezone and Language');
 dt::default_timezone_set('Europe/Berlin');
@@ -79,9 +79,18 @@ $date = dt::create('2016-1-1|{{easter}}|+1 Day');
 $t->checkEqual((string)$date, '2016-03-28 00:00:00');
 
 $t->start('Create Date from DateTime-Object');
-$dateTime = date_create('2000-01-02');
+$tz = new DateTimeZone("UTC");
+$dateTime = date_create('2000-01-02 08:00', $tz);
 $date = dt::create($dateTime);
-$t->checkEqual((string)$date, '2000-01-02 00:00:00');
+$expect = dt::create('2000-01-02 08:00:00',$tz);
+$t->checkEqual(json_encode($date), json_encode($expect));
+
+$t->start('Create Date with new Timezone from DateTime-Object');
+$tz = new DateTimeZone("UTC");
+$dateTime = date_create('2000-01-02 08:00', $tz);
+$date = dt::create($dateTime, "Europe/Berlin");
+$expect = dt::create('2000-01-02 09:00:00',"Europe/Berlin");
+$t->checkEqual(json_encode($date), json_encode($expect));
 
 $t->start('Create Date Timezone UTC');
 $date = dt::create('1.1.2014 00:00','UTC');
@@ -110,6 +119,18 @@ $t->checkEqual($date->formatL('Y-m-d H:i:s.u'), $expected);
 $t->start('Create Date from a big negativ Float Timestamp');
 $date = dt::create(-22144582800.);
 $t->checkEqual((string)$date, '1268-04-07 00:00:00');
+
+$t->start('Create from int arguments yaer, month..');
+$dt = dt::create(2019,5,1,12,23,45,12345);
+$t->checkEqual($dt->toStringWithMicro(),"2019-05-01 12:23:45.012345");
+
+$t->start('Create from arguments yaer=null, month, day');
+$dt = dt::create(null,12,24);  //24.12 this year
+$t->checkEqual($dt->format('Y-m-d H:i:s'),date("Y")."-12-24 00:00:00");
+
+$t->start('Create from int arguments yaer, month, day, timezone');
+$dt = dt::create(2019,5,1,"Europe/Moscow");
+$t->checkEqual($dt->format('Y-m-d H:i:s e'),"2019-05-01 00:00:00 Europe/Moscow");
 
 //create with wildcards
 $t->start('Create Now with Wildcards');
@@ -154,6 +175,11 @@ $t->checkEqual((string)$date, "2018-06-25 03:38:25");
 $t->start('crate from Microsoft Timestamp');
 $date = dt::createFromMsTimestamp(43317.54,"UTC");
 $t->checkEqual((string)$date, "2018-08-05 12:57:36");
+
+$t->start('crate from Microsoft Timestamp with Milliseconds');
+$date = dt::createFromMsTimestamp(5273.57305851856,"UTC");
+$expected = "1914-06-08 13:45:12.256000";
+$t->checkEqual($date->toStringWithMicro(), $expected);
 
 //
 $t->start('Create Date from not valid String');
@@ -228,15 +254,50 @@ $t->checkEqual($strDate,'środa, 14 stycznia 2015 00:00');
  
 $t->start('format with buddhist calendar');  
 $strDate = dt::create('14.1.2015 16:45')->formatL('FULL+SHORT','es_ES@calendar=buddhist');  
-$t->checkContains($strDate,'miércoles,14,enero,2558,BE,16:45'); 
+$t->checkContains($strDate,'miércoles,14,enero,2558,BE,16:45');
 
-$t->start('inputs with other languages');  
+$t->start('format with persian calendar + user-format');
+$icuFormat = "yyyy-MM-dd"; //ICU must use if calendar not gregorian
+$lang = "ir_IR@calendar=persian";
+$date = dt::create("2018-2-19")->formatL($icuFormat,$lang); 
+$t->checkEqual($date, "1396-11-30");
+
+$t->start('format with persian calendar + user-format');
+$icuFormat = "yyyy-MM-dd"; //ICU must use if calendar not gregorian
+$lang = "ir_IR@calendar=persian";
+$date = dt::create("2018-2-19")->formatL($icuFormat,$lang); 
+$t->checkEqual($date, "1396-11-30");
+
+$t->start('format with persian calendar + user-format');
+$icuFormat = "MMMM d, yyyy"; //ICU must use if calendar not gregorian
+$lang = "ir_IR@calendar=persian";
+$date = dt::create("2018-2-19")->formatL($icuFormat,$lang); 
+$t->checkEqual($date, "Bahman 30, 1396");
+
+$t->start('formatIntl with persian calendar + user-format');
+$icuFormat = "yyyy-MM-dd"; //must use if calendar not gregorian
+$lang = "ir_IR@calendar=persian";
+$date = dt::create("2018-2-19")->formatIntl($icuFormat,$lang); 
+$t->checkEqual($date, "1396-11-30");
+
+$t->start('Input in Russian');  
 dt::setDefaultLanguage('ru');
 $date = dt::create("1 октября 1990");
 $t->check($date, $date == dt::create("1990-10-01"));
 
+$t->start('Input in danish');  
+dt::setDefaultLanguage('DA');
+$date = dt::create("3. maj 2018 06:39");
+$t->check($date, $date == dt::create("2018-05-03 06:39:00"));
+
 //set default for checks
 dt::setDefaultLanguage('de');
+//end checke with IntlDateFormatter
+}
+else {
+$t->start("IntlDateFormatter not available");
+$s = "IntlDateFormatter not available, neeed for some test's";
+$t->check($s,true);
 }
 
 $t->start('Add another language');
@@ -367,6 +428,49 @@ $t->start('get count Days after 0001-01-01');
 $dayCount = dt::create('18.12.2014')->toDays();
 $t->checkEqual($dayCount, 735585);
 
+//countDaysTo
+$t->start('get count Sundays between 31.8.-9.9.19');
+$result = dt::create('2019-8-31')->countDaysTo('Sun','2019-9-9');
+$t->checkEqual($result, 2);
+
+$t->start('get count Sundays between 1.9.-9.9.19');
+$result = dt::create('2019-9-1')->countDaysTo('Sun','2019-9-9');
+$t->checkEqual($result, 2);
+
+$t->start('get count Sundays between 1.9.-8.9.19');
+$result = dt::create('2019-9-1')->countDaysTo('Sun','2019-9-8');
+$t->checkEqual($result, 2);
+
+$t->start('get count Sundays between 2.9.-8.9.19');
+$result = dt::create('2019-9-2')->countDaysTo('Sun','2019-9-8');
+$t->checkEqual($result, 1);
+
+$t->start('get count Sundays between 1.9.-7.9.19');
+$result = dt::create('2019-9-1')->countDaysTo('Sun','2019-9-7');
+$t->checkEqual($result, 1);
+
+$t->start('get count Sundays between 2.9.-7.9.19');
+$result = dt::create('2019-9-2')->countDaysTo('Sun','2019-9-7');
+$t->checkEqual($result, 0);
+
+$t->start('get count Sundays between 9.9.-1.9.19');
+$result = dt::create('2019-9-9')->countDaysTo('Sun','2019-9-1');
+$t->checkEqual($result, -2);
+
+$t->start('get count the Weekday from Today to +1 week exclude dateTo');
+$result = dt::create('Today')->countDaysTo('Today','+1 week', true);
+$t->checkEqual($result, 1);
+
+$t->start('get count with wrong day');
+$t->setErrorLevel(0);//error reporting off for next 2 tests
+$result = dt::create('2019-9-9')->countDaysTo('Sam','2019-9-1');
+$t->checkEqual($result, false);
+
+$t->start('get count with wrong dateTo');
+$result = dt::create('2019-9-9')->countDaysTo('Sat','xx');
+$t->restoreErrorLevel();
+$t->checkEqual($result, false);
+
 $t->start('get quarter number of 2015-3-31');
 $result = dt::create('2015-3-31')->getQuarter();
 $t->checkEqual($result, 1);
@@ -422,6 +526,14 @@ $t->start('get dayOfYear from 2017-11-18 as integer');
 //Day of the year starts with 1 on 1.1.
 $result = dt::create('2017-11-18')->dayOfYear;
 $t->checkEqual($result, 322);
+
+$t->start('get timezone name');
+$result = dt::create('now','America/New_York')->tzName;
+$t->checkEqual($result, 'America/New_York');
+
+$t->start('get timezone type');
+$result = dt::create('now','America/New_York')->tzType;
+$t->checkEqual($result, 3);
 
 $t->start('get Date as JD Julian Date Number');
 $result = dt::create('2018-06-25 03:38:25 UTC')->toJD();
@@ -555,7 +667,7 @@ $t->checkEqual($days, 6);
 //diffTotal
 $t->start('diffTotal: with String-Dates');
 $days = dt::create('2003-10-1 6:30')->diffTotal('2003-10-5 6:30',"days");
-$t->checkEqual($days, 4);
+$t->checkEqual($days, (float)(4));
 
 $t->start('diffTotal: 3,5 Days');
 $days = dt::create('2003-10-1 0:00')->diffTotal('2003-10-4 12:00',"days");
@@ -563,11 +675,11 @@ $t->checkEqual($days, 3.5);
 
 $t->start('diffTotal: Hours');
 $hours = dt::create('2003-10-1 0:00')->diffTotal('2003-10-4 12:00',"hours");
-$t->checkEqual($hours, 84);
+$t->checkEqual($hours, (float)(84));
 
 $t->start('diffTotal: Minutes');
 $hours = dt::create('2003-10-1 0:00')->diffTotal('2003-10-4 12:00',"Minutes");
-$t->checkEqual($hours, 84*60);
+$t->checkEqual($hours, (float)(84*60));
 
 $t->start('diffTotal: full Years');
 $years = dt::create('1950-10-1 0:00')->diffTotal('2003-11-4 12:00',"Years");
@@ -599,7 +711,7 @@ $t->checkEqual($seconds, 2.2,"",1E-10); //Delta for Float
 
 $t->start('diffTotal: change winter/summer time');
 $hours = dt::create('2014-03-30 00:00')->diffTotal('2014-03-30 06:00','hour');
-$expected = (version_compare(PHP_VERSION, '5.5.8') >= 0) ? 5 : 6;
+$expected = (version_compare(PHP_VERSION, '5.5.8') >= 0) ? 5.0 : 6.0;
 $t->checkEqual($hours, $expected);
 
 //diffHuman
@@ -658,7 +770,15 @@ $t->start('addSeconds: sub 2,5 Seconds');
 $date = dt::create("2015-03-31 12:00:01.5")->addSeconds(-2.5);
 $t->checkEqual((string)$date, "2015-03-31 11:59:59");
 
+$t->start('addSeconds: convert Chrome Timestamp to DateTime');
+//Google Chrome Epoche Timestamp: Microseconds since 1601-1-1
+$ts = 13209562668824233;
+$expected = "2019-08-06 10:57:48.824232";
+$dateTime = dt::create("1601-1-1 UTC")->addSeconds($ts/1000000);
+$t->checkEqual($dateTime->toStringWithMicro(), $expected);
+
 $t->start('addTime: add 01:05:30');
+$ts = 13209562668824233;
 $date = dt::create("2015-03-31 12:00")->addTime('01:05:30');
 $t->checkEqual((string)$date, "2015-03-31 13:05:30");
 
@@ -680,15 +800,15 @@ $t->checkEqual((string)$date, "2014-04-30 00:00:00");
 
 $t->start('totalRelTime: 3 Days 5 Hours to hours');
 $hours = dt::totalRelTime("3 Days 5 Hours","h");
-$t->checkEqual($hours, 3*24 + 5);
+$t->checkEqual($hours, (float)(3*24 + 5));
 
 $t->start('totalRelTime: 1 year to days, basis 1.1.2005');
 $days = dt::totalRelTime("1 year","days","2005-1-1");
-$t->checkEqual($days, 365);
+$t->checkEqual($days, (float)(365));
 
 $t->start('totalRelTime: 1 month to days, basis 1.2.2004');
 $days = dt::totalRelTime("1 month","days","Feb 2004");
-$t->checkEqual($days, 29);
+$t->checkEqual($days, (float)(29));
 
 $t->start('totalRelTime: 1h 30min to hours');
 $hours = dt::totalRelTime("1hour 30min","hours");
@@ -697,7 +817,7 @@ $t->checkEqual($hours, 1.5);
 $t->start('totalRelTime: DateInterval-Object to hours');
 $i = new DateInterval('P1DT12H');  //1 day + 12 hours
 $hours = dt::totalRelTime($i,'h');
-$t->checkEqual($hours, 36);
+$t->checkEqual($hours, (float)(36));
 
 $t->start('create a date_interval from float');
 $dateInterval = dt::date_interval_create_from_float(4.5,'min');
@@ -724,6 +844,12 @@ $t->start('get a Float-Timestamp with fractions of seconds');
 $timeStamp = dt::create('2006-06-12 13:45:56.25')->getMicroTime();
 $t->checkEqual($timeStamp, strtotime('2006-06-12 13:45:56')+0.25);
 
+$t->start('get a Microsoft-Timestamp with milliseconds');
+$msTimestamp = dt::create("1914-06-08 13:45:12.256","UTC")
+  ->getMsTimestamp();
+$eps = 1/(24*60*60*1000);  //1 ms
+$t->checkEqual($msTimestamp, 5273.573058518562,"",$eps); 
+
 $t->start('create Date from the Timestamp');
 $date = dt::create(3011986800);
 $t->checkEqual((string)$date ,'2065-06-12 00:00:00');
@@ -736,6 +862,7 @@ $t->start('set Float-Timestamp with Milliseconds');
 $date = dt::create()->setTimestamp(3011986800.12);
 $t->checkEqual($date->formatL('Y-m-d H:i:s.u'),'2065-06-12 00:00:00.120000');
 
+//easter
 $t->start('create Easter-Date for year 1775');
 $easterDate = dt::Easter(1775);
 $t->checkEqual((string)$easterDate, '1775-04-16 00:00:00');
@@ -961,6 +1088,16 @@ $t->start('chain with condition, if Time < 12:00:00 set time to 12:00');
 $date = dt::create('2018-09-24 12:23:45'); 
 $date->chain('{{?H<12}}12:00');
 $t->checkEqual((string)$date, '2018-09-24 12:23:45');
+
+$t->start('chain with cron-tab-string');
+$date = dt::create('2018-09-24 12:23:45'); 
+$date->chain('5 8 10 * *');  //Next day 10, hour 8, minute 5
+$t->checkEqual((string)$date, '2018-10-10 08:05:00');
+
+$t->start('create with chain and cron-tab');
+//first day of month is a sunday after 2019-1-1
+$date = dt::create('2019-01-01|0 0 1 * 0');
+$t->checkEqual($date->format('l, d-m-Y'), 'Sunday, 01-09-2019');
 
 $t->start('copy: new Instance');
 $date = dt::create('2016-1-1');
