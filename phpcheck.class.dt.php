@@ -20,7 +20,7 @@ require '../class/class.dt.php';
 //für class.dt.php ab version 1.73
 $t->start('check class version');
 $info = $t->getClassVersion("dt");
-$t->check($info, !empty($info) AND $info >= 1.73);
+$t->check($info, !empty($info) AND $info >= 1.74);
 
 $t->start('set default Timezone and Language');
 dt::default_timezone_set('Europe/Berlin');
@@ -436,6 +436,10 @@ $t->checkEqual($result, 2);
 $t->start('get count Sundays between 1.9.-9.9.19');
 $result = dt::create('2019-9-1')->countDaysTo('Sun','2019-9-9');
 $t->checkEqual($result, 2);
+
+$t->start('get count Sat + Sundays between 30.8.-9.9.19');
+$result = dt::create('2019-8-30')->countDaysTo('Sat,Sun','2019-9-9');
+$t->checkEqual($result, 4);
 
 $t->start('get count Sundays between 1.9.-8.9.19');
 $result = dt::create('2019-9-1')->countDaysTo('Sun','2019-9-8');

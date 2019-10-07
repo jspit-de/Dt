@@ -1,5 +1,8 @@
 # DateTime Extension dt
 
+## Version 1.74 (2019-10-07)
+* modify Method countDaysTo, accept now also a list of weekdays
+
 ## Version 1.73 (2019-09-25)
 * Add Method createFromIntlFormat
 * Add Method timeStampFromIntlFormat

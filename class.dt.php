@@ -2,8 +2,8 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.73                                                           |
-|      Date: 2019-09-24                                                     |
+|   Version: 1.74                                                           |
+|      Date: 2019-10-07                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..19, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -1024,30 +1024,34 @@ class dt extends DateTime{
   }
 
  /*
-  * get count of speciific weekday between dates
-  * @param mixed $day (int 0=Sun .. 6 =Sat or string 'Sun','Mon'..'Sat'
-  *  or rel.DateString or DateString
+  * get count of speciific weekdays between dates
+  * @param mixed $dayIdentList (int 0=Sun .. 6 =Sat or string 'Sun','Mon'..'Sat'
+  *  or rel.DateString or DateString or a comma separated list
   * @param mixed $dateTo: string, timestamp or object
   * @param bool $excludeDateTo exclude the top Date
   * $return int, bool false if error
   */
-  public function countDaysTo($dayIdent, $dateTo, $excludeDateTo = false){
-    if(is_int($dayIdent)) {
-      $day = (int)$dayIdent;
-    }
-    elseif(is_string($dayIdent)) {
-      $wDate = date_create($dayIdent);
-      $day = $wDate ? (int)($wDate->format('w')) : false;
-    }
-    else {
-      $day = false;
-    }
-    if($day < 0 or $day > 6 or $day === false) {
-       trigger_error(
-        'Error Method '.__METHOD__.', invalid Parameter $dayIdent in '. self::backtraceFileLine(),
-        E_USER_WARNING
-      );
-      return false;
+  public function countDaysTo($dayIdentList, $dateTo, $excludeDateTo = false){
+    $weekDays = explode(",",$dayIdentList);
+    foreach($weekDays as &$dayIdent) {
+      $dayIdent = trim($dayIdent);
+      if(is_numeric($dayIdent)) {
+        $dayIdent = (int)$dayIdent;
+      }
+      elseif(is_string($dayIdent)) {
+        $wDate = date_create($dayIdent);
+        $dayIdent = $wDate ? (int)($wDate->format('w')) : false;
+      }
+      else {
+        $dayIdent = false;
+      }
+      if($dayIdent < 0 or $dayIdent > 6 or $dayIdent === false) {
+         trigger_error(
+          'Error Method '.__METHOD__.', invalid Parameter $dayIdent in '. self::backtraceFileLine(),
+          E_USER_WARNING
+        );
+        return false;
+      }
     }
     $start = $this->copy()->setTime(0,0,0);
     $dateTo = self::create($dateTo);
@@ -1067,15 +1071,13 @@ class dt extends DateTime{
       $dateTo = $dTmp;
     }
     if($excludeDateTo) $dateTo->modify('-1 Day');
-    $wStart = $start->format('w');
-    $wEnd = $dateTo->format('w');
     $fullWeeks = (int)($start->diff($dateTo)->days/7);
+    $dayCount = $fullWeeks * count($weekDays);
+    $start->modify(($fullWeeks * 7). " Days");
     //partial count
-        //get partial week day count
-    if($wStart < $wEnd) $partialCount = ($day >= $wStart && $day <= $wEnd);
-    elseif($wStart == $wEnd) $partialCount = $wStart == $day;
-    else $partialCount = ($day >= $wStart || $day <= $wEnd);
-    $dayCount = $partialCount + $fullWeeks;
+    for( ; $start <= $dateTo; $start->modify("+1 Day")){
+      if(in_array($start->format('w'), $weekDays)) ++$dayCount; 
+    }
     return $minus ? -$dayCount : $dayCount;
   }
   
