@@ -111,11 +111,11 @@ $firstAdvent = dt::create('2017-1-1')->chain('12/25|last Sunday|-3 weeks');
 //modify with chain Spring Bank Holiday 2016 (United Kingdom)
 $date = dt::create('2016-1-1')->chain('Last monday of May {{year}}');  //2016-05-30
 
-//chain with conditions : if time after 12:00 next Day
-$date = dt::create('2018-09-24 10:30')->chain('{{?Hi>1200}}next weekday');  
+//chain with conditions : if it is after 12:00, take next working day at 8:00
+$date = dt::create('2018-09-24 10:30')->chain('{{?Hi>1200}}next weekday 8:00');  
 //2018-09-24 10:30:00  
-$date = dt::create('2018-09-24 12:30')->chain('{{?Hi>1200}}next weekday');
-//2018-09-25 10:30:00
+$date = dt::create('2018-09-24 12:30')->chain('{{?Hi>1200}}next weekday 8:00');
+//2018-09-25 08:00:00
 
 //cron
 $cronStr = "20,30 1 * * 1-5";  //mo-fr 01:20, 1:30 
