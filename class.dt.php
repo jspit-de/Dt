@@ -2,8 +2,8 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.74                                                           |
-|      Date: 2019-10-07                                                     |
+|   Version: 1.77                                                           |
+|      Date: 2019-12-09                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..19, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -42,6 +42,8 @@ class dt extends DateTime{
       'm' => 'Months','y' => 'Years','y1' => 'Year'),
     self::DE => array('Sekunden' => 60,'Minuten' => 60,'Stunden' => 24,'Tage' => 7,'Wochen' => 1.E9,
       'm' => 'Monate','y' => 'Jahre', 'y1' => 'Jahr'),
+    'fr' => array('secondes' => 60,'minutes' => 60,'heures' => 24,'jours' => 7,'semaines' => 1.E9,
+      'm' => 'mois','y' => 'années','y1' => 'an'),
   );
   
   protected static $strictModeCreate = false;
@@ -713,7 +715,22 @@ class dt extends DateTime{
     $strDateWeek = self::create($dateWeek)->format('o-W');
     if($strDateWeek) return $strDateWeek === $this->format('o-W');
     return null;
-  }  
+  } 
+ 
+ /*
+  * @return true if the current Date is <= now
+  */  
+  public function isPast() {
+    return $this <= date_create('now');
+  }
+
+ /*
+  * @return true if the current Date is > now
+  */  
+  public function isFuture() {
+    return $this > date_create('now');
+  }
+
   
  /*
   * return integer Seconds since midnight 
@@ -971,7 +988,7 @@ class dt extends DateTime{
   public function diffHuman($date=null, $language = null) {
     //language handling
     $language = $language === null ? self::$defaultLanguage : $language;
-    if(!array_key_exists($language,static::$humanUnits)) $language = self::EN_PHP;
+    if(!array_key_exists($language,static::$humanUnits)) $language = self::EN;
     $units = static::$humanUnits[$language];
     
     $diff = $this->diffTotal($date);
@@ -1108,24 +1125,24 @@ class dt extends DateTime{
           '{{easter_o}}' => self::easter($year,self::EASTER_EAST)->format('m/d 00:00'),
           '{{passover}}' => self::Passover($year)->format('m/d 00:00'),
         ));
-        foreach($replacements as $key => $value){
-          $modifier = str_replace($key, $value, $modifier); 
-        }
-        //short replacements with date formats
-        if(preg_match_all('~\{\{(\w)\}\}~', $modifier, $matches, PREG_SET_ORDER)){
-          foreach($matches as $match){
-            //match[0]: {{char}} , match[1]: char
-            $modifier = str_replace($match[0], parent::format($match[1]),$modifier);
-          }
-        }
+        $modifier = str_replace(array_keys($replacements), $replacements, $modifier); 
+        //replacements with date formats
+        $modifier = $this->replaceWildcards($modifier);
         //condition how "{{?D=Wed}}+1 Day"
         if(preg_match('~^\{\{\?([DdmLYIHis]+)(!?=|<|>)([^}]+)\}\}(.*)~',$modifier,$match)) {
           $dateDetail = parent::format($match[1]);
-          if(($match[2] == "=" AND $dateDetail == $match[3])
-            OR ($match[2] == "!=" AND $dateDetail != $match[3])
-            OR ($match[2] == ">" AND $dateDetail > $match[3])
-            OR ($match[2] == "<" AND $dateDetail < $match[3])
-          ) $this->modify($match[4]);
+          $cmpStr = $match[3];
+          $newModifier = $match[4];
+          //compare with NOW how {{?Ymd<NOW}}
+          $curDate = date_create("now", parent::getTimeZone());
+          if(strtoupper($cmpStr) === "NOW") {
+            $cmpStr = $curDate->format($match[1]);
+          }
+          if(($match[2] == "=" AND $dateDetail == $cmpStr)
+            OR ($match[2] == "!=" AND $dateDetail != $cmpStr)
+            OR ($match[2] == ">" AND $dateDetail > $cmpStr)
+            OR ($match[2] == "<" AND $dateDetail < $cmpStr)
+          ) $this->modify($newModifier);
         }
         elseif($modifier != "") {
           $this->modify($modifier);
@@ -1816,6 +1833,7 @@ class dt extends DateTime{
         $dt = preg_replace('~^(\d{4} )(.+)$~u',"$2 $1",$dt);  //move YYYY to end
       }
     }
+    debug::write('santize',$dt);
     return $dt;
   }
   
@@ -1937,5 +1955,22 @@ class dt extends DateTime{
     $korr = -(int) $dt->format('w');
     
     return $dt->modify($korr.' Days');
-  }  
+  }
+  
+ /*
+  *  replace date format expressions how {{Y-m}} with Values
+  */
+  private function replaceWildcards($pattern)
+  {
+    $now = date_create('now',parent::getTimezone());
+    $prev = $this;
+    return preg_replace_callback(
+      '~\{\{#?([YmdHistuvNwz\-: ]+)\}\}~',
+      function($m) use($prev,$now){
+        if($m[0][2] == "#") return $now->format($m[1]);
+        return $prev->format($m[1]);
+      },
+      $pattern
+    );
+  }
 }

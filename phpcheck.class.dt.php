@@ -946,6 +946,14 @@ $t->start('is 23.11.2015 in same week how 22.11.2015 - no');
 $isInWeek = dt::create('23.11.2015')->isInWeek('22.11.2015');
 $t->checkEqual($isInWeek, false);
 
+$t->start("Determines if a date is in the future");
+$result = dt::create('+2 Second')->isFuture();
+$t->checkEqual($result, true);
+
+$t->start("Determines if a date is in the past");
+$result = dt::create('-2 Second')->isPast();
+$t->checkEqual($result, true);
+
 //isCron
 $t->start('isCron 00:01: ok');
 $cronStr = "1 0 * * *";  //every Day 00:01 
@@ -1093,6 +1101,14 @@ $date = dt::create('2018-09-24 12:23:45');
 $date->chain('{{?H<12}}12:00');
 $t->checkEqual((string)$date, '2018-09-24 12:23:45');
 
+$t->start('If the date is in the past, it is set to the current time +1 hour');
+$date = dt::create('2000-01-01'); //is in the past
+$date->chain('{{?YmdHis<NOW}} {{#Y-m-d H:i}} +1 Hour');
+
+$expected = date_create('now')->format('Y-m-d H:i');
+$expected = date_create($expected)->modify('+ 1 Hour')->format('Y-m-d H:i:s');
+$t->checkEqual((string)$date, $expected);
+
 $t->start('chain with cron-tab-string');
 $date = dt::create('2018-09-24 12:23:45'); 
 $date->chain('5 8 10 * *');  //Next day 10, hour 8, minute 5
@@ -1102,6 +1118,38 @@ $t->start('create with chain and cron-tab');
 //first day of month is a sunday after 2019-1-1
 $date = dt::create('2019-01-01|0 0 1 * 0');
 $t->checkEqual($date->format('l, d-m-Y'), 'Sunday, 01-09-2019');
+
+$t->start('chain condition = NOW true');
+$dt = dt::create('today 12:00')
+  ->chain('{{?Ymd=NOW}} +1 hour');
+$expected = dt::create('today 13:00'); 
+$t->checkEqual((string)$dt, (string)$expected);
+
+$t->start('chain condition = NOW false');
+$dt = dt::create('tomorrow 12:00')
+  ->chain('{{?Ymd=NOW}} +1 hour');
+$expected = dt::create('tomorrow 12:00'); 
+$t->checkEqual((string)$dt, (string)$expected); 
+
+$t->start('chain condition > NOW true');
+$dt = dt::create('tomorrow 12:00')
+  ->chain('{{?Ymd>NOW}} +1 hour');
+$expected = dt::create('tomorrow 13:00'); 
+$t->checkEqual((string)$dt, (string)$expected);
+
+$t->start('chain condition < NOW true');
+$dt = dt::create('yesterday 12:00')
+  ->chain('{{?Ymd<NOW}} {{#Y-m-d H:i:s}}');
+$expected = dt::create('now'); 
+$t->checkEqual((string)$dt, (string)$expected);
+
+$t->start('chain condition < NOW true');
+$dt = dt::create('yesterday 12:00')
+  ->chain('{{?Ymd<NOW}} {{#Y-m-d}}');
+$expected = dt::create('today 12:00'); 
+$t->checkEqual((string)$dt, (string)$expected); 
+
+//
 
 $t->start('copy: new Instance');
 $date = dt::create('2016-1-1');

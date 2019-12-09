@@ -1,5 +1,14 @@
 # DateTime Extension dt
 
+## Version 1.77 (2019-12-09)
+* the replacement of wildcards extended
+
+## Version 1.76 (2019-11-30)
+* added methods isPast(), isFuture()
+
+## Version 1.75 (2019-11-18)
+* added human units for the French language
+
 ## Version 1.74 (2019-10-07)
 * modify Method countDaysTo, accept now also a list of weekdays
 
