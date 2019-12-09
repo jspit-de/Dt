@@ -1833,7 +1833,6 @@ class dt extends DateTime{
         $dt = preg_replace('~^(\d{4} )(.+)$~u',"$2 $1",$dt);  //move YYYY to end
       }
     }
-    debug::write('santize',$dt);
     return $dt;
   }
   
