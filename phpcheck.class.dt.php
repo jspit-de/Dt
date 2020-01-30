@@ -1,6 +1,6 @@
 <?php
-//last modify: 2019-08-19
-//check for class dt v1.7
+//last modify: 2020-01-22
+//check for class dt v1.83
 error_reporting(-1);
 ini_set('display_errors', 1);
 header('Content-Type: text/html; charset=UTF-8');
@@ -17,10 +17,10 @@ $t->setOutputOnlyErrors(!empty($_GET['error']));
  */
 require '../class/class.dt.php';
 
-//für class.dt.php ab version 1.73
+//für class.dt.php ab version 1.83
 $t->start('check class version');
 $info = $t->getClassVersion("dt");
-$t->check($info, !empty($info) AND $info >= 1.74);
+$t->check($info, !empty($info) AND $info >= 1.83);
 
 $t->start('set default Timezone and Language');
 dt::default_timezone_set('Europe/Berlin');
@@ -132,13 +132,17 @@ $t->start('Create from int arguments yaer, month, day, timezone');
 $dt = dt::create(2019,5,1,"Europe/Moscow");
 $t->checkEqual($dt->format('Y-m-d H:i:s e'),"2019-05-01 00:00:00 Europe/Moscow");
 
+$t->start('Create from int arguments H:i curr.Time + timezone UTC');
+$dt = dt::create(2019,5,1,null,null,"UTC");
+$t->checkEqual($dt->format('H:i'),gmdate('H:i'));
+
 //create with wildcards
 $t->start('Create Now with Wildcards');
-$date = dt::create("{{year}}-{{month}}-{{day}}");
+$date = dt::create("{{Y-m-d}}");
 $t->checkEqual((string)$date, date("Y-m-d H:i:s"));
 
 $t->start('Create Today with Wildcards');
-$date = dt::create("{{year}}-{{month}}-{{day}} 00:00");
+$date = dt::create("{{Y-m-d}} 00:00");
 $t->checkEqual((string)$date, (string)dt::create("Today"));
 
 $t->start('Create easter date this year with Wildcard');
@@ -168,18 +172,55 @@ $t->start('2 Month after 2017-06-15 13:30, Day 5 of this Month, same Time');
 $date = dt::create("2017-06-15 13:30|+2 month|{{Y}}-{{m}}-05");
 $t->checkEqual((string)$date, "2017-08-05 13:30:00");
 
+//create Dt from format
+$t->start('crate dt from format');
+$input     = "2020-01-07T11:55:34:438 GMT+0600";
+$format = 'Y-m-d\Th:i:s:u \G\M\TO';
+$dt = dt::createDtFromFormat($format, $input);
+$result = $dt->format($format);
+$t->checkEqual($result, "2020-01-07T11:55:34:438000 GMT+0600");
+
 $t->start('crate from Julian Date Number');
 $date = dt::createFromJD(2458294.65168,"UTC");
 $t->checkEqual((string)$date, "2018-06-25 03:38:25");
 
-$t->start('crate from Microsoft Timestamp');
+$t->start('crate from Microsoft Excel Timestamp');
 $date = dt::createFromMsTimestamp(43317.54,"UTC");
 $t->checkEqual((string)$date, "2018-08-05 12:57:36");
 
-$t->start('crate from Microsoft Timestamp with Milliseconds');
+$t->start('crate from Microsoft Excel Timestamp with Milliseconds');
 $date = dt::createFromMsTimestamp(5273.57305851856,"UTC");
 $expected = "1914-06-08 13:45:12.256000";
 $t->checkEqual($date->toStringWithMicro(), $expected);
+
+//createFromSystemTime
+$t->start('createFromSystemTime');
+//create a LabVIEW Timestamp from base 1 Jan 1904 with resulution 1ms
+$testDate = "2006-12-13 09:45:55";
+$basisDate = "1904-1-1";
+$resolution = 0.001; //1ms
+$timeStamp = -dt::create($testDate,'UTC')->diffTotal($basisDate,"Seconds")/$resolution;
+//createFromSystemTime
+$date = dt::createFromSystemTime($timeStamp,$basisDate,$resolution,"UTC");
+$t->checkEqual((string)$date, $testDate);
+
+$t->start('create dt from a LDAP Timestamp');
+$timeStamp = 130981536000000000;
+$date = dt::createFromSystemTime($timeStamp,'1601-1-1',1.E-7,"UTC");
+$expected = "2016-01-25 00:00:00";
+$t->checkEqual((string)$date, $expected);
+
+$t->start('create dt from Mac Timestamp: seconds since Jan 1 1904');
+$timeStamp = 3662360215;
+$date = dt::createFromSystemTime($timeStamp,'Jan 1 1904',1.0,"UTC");
+$expected = "2020-01-20 10:16:55";
+$t->checkEqual((string)$date, $expected);
+
+$t->start('create dt from Microsoft Timestamp: days since Dec 31 1899');
+$timeStamp = 43850.428414352;
+$date = dt::createFromSystemTime($timeStamp,'Dec 30 1899','1 Day',"UTC");
+$expected = "2020-01-20 10:16:55";
+$t->checkEqual((string)$date, $expected);
 
 //
 $t->start('Create Date from not valid String');
@@ -187,6 +228,7 @@ $t->setErrorLevel(0);//error reporting off for this test
 $date = dt::create('31.0x.2015');
 $t->restoreErrorLevel();
 $t->checkEqual($date, false);
+
 
 $t->start('Get last Errormassage');
 $errorInfo = dt::getLastErrorsAsString() ;
@@ -300,15 +342,22 @@ $s = "IntlDateFormatter not available, neeed for some test's";
 $t->check($s,true);
 }
 
+//utcFormat
+$t->start('utcFormat: time is UTC/GMT');
+$dt = dt::create('2019-10-10 03:00', 'Europe/Bucharest');
+$utcTime = $dt->utcFormat();
+$t->checkEqual($utcTime, "2019-10-10 00:00:00");
+
+$t->start('utcFormat: time is UTC/GMT');
+$dt = dt::create('2019-07-10 02:45', 'Europe/Berlin');
+$utcTime = $dt->utcFormat('d.m.Y H:i');
+$t->checkEqual($utcTime, "10.07.2019 00:45");
+
 $t->start('Add another language');
-$frLanguage = array('fr' => 
-       array("janvier", "février"," mars "," avril ",
-       " mai "," juin "," juillet "," août ",
-       " septembre "," octobre "," novembre "," décembre ",
-       "lundi", "mardi", "mercredi", "jeudi", 
-       "vendredi", "samedi","dimanche"),
-);     
-dt::addLanguage($frLanguage);
+$list = "janvier,février,mars,avri,mai,juin,juillet,août,septembre,octobre,novembre,décembre,
+lundi,mardi,mercredi,jeudi,vendredi,samedi,dimanche,
+secondes,minutes,heures,jours,semaines,mois,années,an";
+dt::addLanguage("fr",$list);
 $strDate = dt::create('14.1.2015')->formatL('l, d F Y','fr'); 
 $t->checkEqual($strDate,'mercredi, 14 janvier 2015');
 
@@ -465,6 +514,10 @@ $t->start('get count the Weekday from Today to +1 week exclude dateTo');
 $result = dt::create('Today')->countDaysTo('Today','+1 week', true);
 $t->checkEqual($result, 1);
 
+$t->start('Count all weekdays in October 2019, Mon-Fri as Numbers 1..5');
+$result = dt::create('2019-10-01')->countDaysTo('1,2,3,4,5','2019-10-31');
+$t->checkEqual($result, 23);
+
 $t->start('get count with wrong day');
 $t->setErrorLevel(0);//error reporting off for next 2 tests
 $result = dt::create('2019-9-9')->countDaysTo('Sam','2019-9-1');
@@ -494,6 +547,10 @@ $t->checkEqual($result, 4);
 $t->start('get day as integer');
 $result = dt::create('2015-04-07 06:15:46')->day;
 $t->checkEqual($result, 7);
+
+$t->start('get short day name');
+$result = dt::create('2015-04-07 06:15:46')->dayName;
+$t->checkEqual($result, "Tue");
 
 $t->start('get hour as integer');
 $result = dt::create('2015-4-14 06:15:46')->hour;
@@ -702,7 +759,8 @@ $month = dt::create('2017-12-31')->diffTotal('2019-03-02',"Month");
 $t->checkEqual($month, 14);
 
 $t->start('diffTotal: full Month');
-$month = dt::create('2018-02-15 12:00:01')->diffTotal('2018-03-15 12:00:00',"Month");
+$month = dt::create('2018-02-15 12:00:01')
+  ->diffTotal('2018-03-15 12:00:00',"Month");
 $t->checkEqual($month, 0);
 
 $t->start('diffTotal: Seconds');
@@ -710,13 +768,30 @@ $seconds = dt::create('1950-10-1 0:00')->diffTotal('2033-11-4 12:00');
 $t->check($seconds, $seconds == 2622283200);
 
 $t->start('diffTotal: Seconds and Microseconds');
-$seconds = dt::create('2016-06-03 15:30:45.2')->diffTotal('2016-06-03 15:30:47.4');
+$seconds = dt::create('2016-06-03 15:30:45.2')
+  ->diffTotal('2016-06-03 15:30:47.4');
 $t->checkEqual($seconds, 2.2,"",1E-10); //Delta for Float
 
 $t->start('diffTotal: change winter/summer time');
-$hours = dt::create('2014-03-30 00:00')->diffTotal('2014-03-30 06:00','hour');
+$hours = dt::create('2014-03-30 00:00')
+  ->diffTotal('2014-03-30 06:00','hour');
 $expected = (version_compare(PHP_VERSION, '5.5.8') >= 0) ? 5.0 : 6.0;
 $t->checkEqual($hours, $expected);
+
+$t->start('diffTotal H:i hours and minutes, seconds round');
+$hours = dt::create('2019-12-06 00:00')
+  ->diffTotal('2019-12-07 13:45:31','H:i');
+$t->checkEqual($hours, "37:46");
+
+$t->start('diffTotal H:i:s hours, minutes and seconds');
+$hours = dt::create('2019-12-06 00:00')
+  ->diffTotal('2019-12-07 13:45:31','H:i:s');
+$t->checkEqual($hours, "37:45:31");
+
+$t->start('diffTotal H:i hours and minutes, seconds round');
+$hours = dt::create('2019-12-08 00:00')
+  ->diffTotal('2019-12-07 13:45:31','H:i');
+$t->checkEqual($hours, "-10:14");
 
 //diffHuman
 $t->start('diffHuman: de');
@@ -782,13 +857,16 @@ $dateTime = dt::create("1601-1-1 UTC")->addSeconds($ts/1000000);
 $t->checkEqual($dateTime->toStringWithMicro(), $expected);
 
 $t->start('addTime: add 01:05:30');
-$ts = 13209562668824233;
 $date = dt::create("2015-03-31 12:00")->addTime('01:05:30');
 $t->checkEqual((string)$date, "2015-03-31 13:05:30");
 
 $t->start('addTime: add 02:15');
 $date = dt::create("2015-03-31 12:00")->addTime('02:15');
 $t->checkEqual((string)$date, "2015-03-31 14:15:00");
+
+$t->start('addTime: 48:15');
+$date = dt::create("2015-02-05 12.00")->addTime('48:15');
+$t->checkEqual((string)$date, "2015-02-07 12:15:00");
 
 $t->start('subTime: sub 02:30');
 $date = dt::create("2015-03-31 12:00")->subTime('02:30');
@@ -818,10 +896,54 @@ $t->start('totalRelTime: 1h 30min to hours');
 $hours = dt::totalRelTime("1hour 30min","hours");
 $t->checkEqual($hours, 1.5);
 
+$t->start('totalrelTime: hours:minutes');
+$minutes = dt::totalRelTime("124:06",'minutes');
+$t->checkEqual($minutes, (float)(124*60+6));
+
+$t->start('totalrelTime: minutes:seconds,millisec');
+$minutes = dt::totalRelTime("01:65,25",'minutes');
+$t->checkEqual($minutes, (60 + 65.25)/60);
+
+$t->start('totalrelTime: hours:minutes:seconds.millisec');
+$seconds = dt::totalRelTime("124:06:01.56"); //default unit seconds
+$t->checkEqual($seconds, 124*3600+6*60+1.56);
+
+$t->start('totalRelTime: DateInterval-Object with Month to hours');
+$di = new DateInterval('P4M3DT2H');  //4 month + 3 Days + 2 Hours
+$hours = dt::totalRelTime($di,'h',"2016-1-1");
+//2016 Days jan-apr: 31+29+31+30
+$expected = (31+29+31+30+3)*24 + 2.;
+$t->checkEqual($hours, $expected);
+
 $t->start('totalRelTime: DateInterval-Object to hours');
 $i = new DateInterval('P1DT12H');  //1 day + 12 hours
 $hours = dt::totalRelTime($i,'h');
 $t->checkEqual($hours, (float)(36));
+
+/*
+$t->start('totalrelTime: hours:minutes:seconds');
+$seconds = dt::totalRelTime("2 days 124:06:15");
+$expected = 2*24*60*60 + 124*60*60 + 6*60 + 15;
+$t->checkEqual($seconds, (float)$expected);
+*/
+
+//timeToSeconds
+$t->start('timeToSeconds ');
+$tests = array(
+  "hhh:ii" => array("245:23" , 245. * 3600 + 23 * 60),
+  "hhh:ii:ss" => array("245:23:15" , 245. * 3600 + 23 * 60 +15),
+  "hhh:ii:ss.m" => array("234:45:34.6" , (234 * 60 + 45) * 60 + 34.6),
+  "hhh:ii:ss,m" => array("234:45:34,6" , (234 * 60 + 45) * 60 + 34.6),
+  "ss" => array("23" , 23.),
+  "ss.m" => array("23.25" , 23.25),
+  "hh:i" => array("34:8" , 34 * 3600 + 8. * 60),
+
+  "Error no ms" => array("56." , false),
+  "Error letter" => array("a34:54" , false),
+  "Error format" => array("1:2:3:4" , false),
+  "Error2 format" => array("3 hours" , false),
+);
+$t->checkMultiple('dt::timeToSeconds',$tests);
 
 $t->start('create a date_interval from float');
 $dateInterval = dt::date_interval_create_from_float(4.5,'min');

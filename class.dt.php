@@ -2,8 +2,8 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.77                                                           |
-|      Date: 2019-12-09                                                     |
+|   Version: 1.83                                                           |
+|      Date: 2020-01-30                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..19, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -140,9 +140,14 @@ class dt extends DateTime{
       if(count($args) > 1) {
         //args year,month,..
         $args += array(2019,1,1,0,0,0,0); //+defaults
-        $now = explode(" ",date("Y n j H i s u"));
+        $now = explode(" ",date_create('now',$timeZone)->format("Y n j H i s u"));
         for($i=0; $i < 7; $i++){
-          if($args[$i] === null) $args[$i] = (int)$now[$i]; 
+          if($args[$i] === null) {
+            $args[$i] = (int)$now[$i];
+            if($i == 6 AND $args[6] == 0) {
+              $args[6] = (int)((float)microTime(false) * 1000000);
+            }
+          }  
         }
         $dt = vsprintf('%d-%d-%d %d:%d:%d.%06d',$args);
       }
@@ -238,17 +243,29 @@ class dt extends DateTime{
   * $timezone dateTimeZone object or string, defeault null for default Timezone
   * Returns a new dt instance or FALSE on failure.
   */
-  public static function createDtFromFormat($format, $time , $timezone = null )
+  public static function createDtFromFormat($format, $time , $timeZone = null )
   {
+    if($timeZone === null) {
+        $timeZone = date_default_timezone_get();
+    }
     if(is_string($timeZone)) {
       $timeZone = new DateTimeZone($timeZone);
     }
-    return new static(parent::createFromFormat($format, $time , $timezone));
+    $dt = parent::createFromFormat($format, $time , $timeZone);
+    if($dt === false) return false;
+    if(self::$strictModeCreate) {
+      $errInfo = $dt->getLastErrors();
+      if( $errInfo['warning_count']+$errInfo['error_count'] > 0 ) {
+        return false;
+      }
+    }
+    return new static($dt);
   }
 
  /*
   * Parses a date-time string according to a specified Intl format
   * $format string Format 
+  *  http://userguide.icu-project.org/formatparse/datetime
   * $strDateTime string representing the time
   * $timeZone dateTimeZone object or string, defeault null for default Timezone
   * $language string locale-info
@@ -338,9 +355,9 @@ class dt extends DateTime{
   }
 
  /*
-  * create dt from a Microsoft Timestamp (days since Dec 31 1899)
+  * create dt from a Microsoft Excel Timestamp (days since Dec 31 1899)
   * @param float/Integer timestamp Microsoft Timestamp days since Dec 31 1899
-  * @param timezone dateTimeZone object or string, defeault is "UTC" , null for default Timezone
+  * @param timezone dateTimeZone object or string, default is "UTC" , null for default Timezone
   * @return new dt instance or FALSE on failure
   */
   public static function createFromMsTimestamp($timestamp, $timeZone = "UTC" )
@@ -348,7 +365,33 @@ class dt extends DateTime{
     $unixTs = round(($timestamp - 25569) * 86400, 3);  //ms
     return self::create($unixTs, $timeZone);
   }
-
+  
+ /*
+  * create from System Time
+  * @param $time : date/time get from specific system
+  * @param $base : date/time for start epoch or range
+  *   default 1970-01-01 Linux/Unix
+  * @param float $resolution: resolution of $time in seconds
+  *   default 1 second
+  * @param timeZone, default default Timezone
+  * @return new dt instance or FALSE on failure
+  */
+  public static function createFromSystemTime(
+    $time, 
+    $basis = "1970-01-01", 
+    $resolution = 1.0, 
+    $timeZone = null
+  )
+  {
+    $date = self::create($basis,'UTC');
+    if($date === false) return false;
+    if(is_string($resolution) AND !is_numeric($resolution)){
+      $resolution = self::totalRelTime($resolution);
+    }
+    return $date->addSeconds(round($time * $resolution))
+      ->setTimeZone($timeZone);
+  }  
+  
  /*
   * get a Microsoft Timestamp (days since Dec 31 1899)
   * @return float (days since Dec 31 1899)
@@ -393,7 +436,7 @@ class dt extends DateTime{
       return true;
     }
     elseif(($langConfig = self::createLanguageConfig($defaultLanguage))){
-      $addOk = self::addLanguage($langConfig);
+      $addOk = self::addLanguage($defaultLanguage,$langConfig);
       if($addOk) self::$defaultLanguage = $defaultLanguage;
       return $addOk;      
     }
@@ -409,18 +452,31 @@ class dt extends DateTime{
   public static function getDefaultLanguage() {
     return self::$defaultLanguage;
   }
-
   
  /*
   * dt::addLanguage
-  * par: array with 12 full month names and 7 day names
-  * example array: ['fr' => ["Janvier",..,"Décembre","Dimanche" ..]]
+  * @param string short language Name ("fr")
+  * @param string Name List "janvier,février,.."
   */ 
-  public static function addLanguage(array $month_and_days) {
-    if(array_key_exists('en_php',$month_and_days)) {
-      return false;
+  public static function addLanguage($language, $nameList) {
+    if($language == 'en_php') {
+      return false; //don't use
     }
-    self::$mon_days = array_merge(self::$mon_days,$month_and_days);
+    $list = array_map('trim',explode(",",$nameList));
+    //add month and day names
+    self::$mon_days[$language] = array_slice($list,0,19);
+    //add units
+    $unitNames = array_slice($list,19);
+    if(count($unitNames) == 8){
+      //array('secondes' => 60,'minutes' => 60,'heures' => 24,'jours' => 7,'semaines' => 1.E9,
+      //'m' => 'mois','y' => 'années','y1' => 'an'
+      $newUnits = array(
+        $unitNames[0] => 60, $unitNames[1] => 60, $unitNames[2] => 24,
+        $unitNames[3] => 7, $unitNames[4] => 1.E9, 
+        'm' => $unitNames[5], 'y' => $unitNames[6], 'y1' => $unitNames[7]
+      );
+      static::$humanUnits[$language] = $newUnits;
+    }    
     return true;
   }
   
@@ -544,6 +600,18 @@ class dt extends DateTime{
           $format);
     return datefmt_format($intlFormatter ,$this);
   }
+  
+ /*
+  * returns a formatted date string
+  * @param string $format: default 'Y-m-d H:i:s'
+  */ 
+  public function utcFormat($format = 'Y-m-d H:i:s') {
+    return $this
+      ->copy()
+      ->setTimeZone('UTC')
+      ->format($format)
+    ;
+  }  
   
  /*
   * set Time of day
@@ -916,68 +984,89 @@ class dt extends DateTime{
   * for Year and Month return full Years or Month (integer)
   */
   public function diffTotal($date=null, $unitP = "sec") {
-    $unitList = array(
-      'y' => 'Years', 'm' => 'Month', 'w' => 'Weeks','d' => 'Days', 
-      'h' => 'Hours', 'i' => 'Minutes', 's' => 'Seconds' 
-    );
-    $match = preg_grep('/^'.preg_quote($unitP,'/').'/i',$unitList);
-    
-    if(empty($match)) {
-      trigger_error('Unknown Parameter "'.$unitP.'" for '.__METHOD__, E_USER_WARNING);
-      return false;
-    }
-    else {
-      $unit = array_pop($match);
-    }
-    $refDate = self::create($date);
+
+    $refDate = self::create($date,parent::getTimezone());
     if($refDate === false) {
       trigger_error('First Parameter for '.__METHOD__.' is not a valid Date', E_USER_WARNING);
       return false;
     }
-
     $diff = $this->diff($refDate);
-    if($unit == $unitList['y']) {
-      return $diff->invert ? -$diff->y : $diff->y;
-    }
-    elseif($unit == $unitList['m']){
-      //$month = $diff->y * 12 + $diff->m;
-      //return $diff->invert ? -$month : $month;
-      list($yearStart,$monthStart,$dayStart) = explode(" ",$this->format("Y m dHis"));
-      list($yearEnd,$monthEnd, $dayEnd) = explode(" ",$refDate->format("Y m dHis"));
-      $mothDiff = ($yearEnd - $yearStart) * 12 + $monthEnd - $monthStart;
-      if($dayStart > $dayEnd) --$mothDiff;
-      return $mothDiff;
-    }
-    else {
-      $total = $diff->days;
-      if($total == 0) {
-        if($diff->y != 0 || $diff->m != 0) return false;
-        $total = $diff->d;
+    
+    if(strpos($unitP,':') === false){
+      //pure unit hour, min..
+      $unitList = array(
+        'y' => 'Years', 'm' => 'Month', 'w' => 'Weeks','d' => 'Days', 
+        'h' => 'Hours', 'i' => 'Minutes', 's' => 'Seconds',
+      );
+      $match = preg_grep('/^'.preg_quote($unitP,'/').'/i',$unitList);
+      
+      if(empty($match)) {
+        trigger_error('Unknown Parameter "'.$unitP.'" for '.__METHOD__, E_USER_WARNING);
+        return false;
       }
+      else {
+        $unit = array_pop($match);
+      }
+
+      
+      if($unit == $unitList['y']) {
+        return $diff->invert ? -$diff->y : $diff->y;
+      }
+      elseif($unit == $unitList['m']){
+        //$month = $diff->y * 12 + $diff->m;
+        //return $diff->invert ? -$month : $month;
+        list($yearStart,$monthStart,$dayStart) = explode(" ",$this->format("Y m dHis"));
+        list($yearEnd,$monthEnd, $dayEnd) = explode(" ",$refDate->format("Y m dHis"));
+        $mothDiff = ($yearEnd - $yearStart) * 12 + $monthEnd - $monthStart;
+        if($dayStart > $dayEnd) --$mothDiff;
+        return $mothDiff;
+      }
+      else {
+        $total = $diff->days;
+        if($total == 0) {
+          if($diff->y != 0 || $diff->m != 0) return false;
+          $total = $diff->d;
+        }
+      }
+      $total = $total * 24 + $diff->h;
+      $total = $total * 60 + $diff->i;
+      $total = $total * 60 + $diff->s;
+      //micro Sec
+      if(isset($diff->f)) {
+        $total += $diff->f;
+        $microSec = 0.0;
+      }
+      else {
+        $microSec = (float)('0.'.$refDate->format('u')) - (float)('0.'.$this->format('u')); 
+        $total +=  $diff->invert ? -$microSec : $microSec;    
+      }
+      $total = $diff->invert ? -$total : $total;
+      //$total += $microSec; 
+      if($unit == $unitList['s']) return $total;
+      $total /= 60;
+      if($unit == $unitList['i']) return $total;
+      $total /= 60;
+      if($unit == $unitList['h']) return $total;
+      $total /= 24;
+      if($unit == $unitList['d']) return $total;
+      $total /= 7;
+      return $total;
     }
-    $total = $total * 24 + $diff->h;
-    $total = $total * 60 + $diff->i;
-    $total = $total * 60 + $diff->s;
-    //micro Sec
-    if(isset($diff->f)) {
-      $total += $diff->f;
-      $microSec = 0.0;
+    else{
+      //special time H:i ..
+      $minus = $diff->invert ? "-" : "";
+      $totalHours = $diff->days * 24 + $diff->h;
+      if($unitP == 'H:i'){
+        return sprintf('%s%02d:%02d',$minus,$totalHours,round($diff->i + $diff->s/60)); 
+      }
+      elseif($unitP == 'H:i:s'){
+        return sprintf('%s%02d:%02d:%02d',$minus,$totalHours,$diff->i,$diff->s); 
+      }
+      else{
+        trigger_error('Unknown Parameter "'.$unitP.'" for '.__METHOD__, E_USER_WARNING);
+        return false;
+      }        
     }
-    else {
-      $microSec = (float)('0.'.$refDate->format('u')) - (float)('0.'.$this->format('u')); 
-      $total +=  $diff->invert ? -$microSec : $microSec;    
-    }
-    $total = $diff->invert ? -$total : $total;
-    //$total += $microSec; 
-    if($unit == $unitList['s']) return $total;
-    $total /= 60;
-    if($unit == $unitList['i']) return $total;
-    $total /= 60;
-    if($unit == $unitList['h']) return $total;
-    $total /= 24;
-    if($unit == $unitList['d']) return $total;
-    $total /= 7;
-    return $total;
   }
   
  /*
@@ -1163,10 +1252,11 @@ class dt extends DateTime{
   
  /*
   * return int/float value in the selected unit from
-  * a relativ Time or a DateInterval-Object
+  * a relativ Time or a DateInterval-Object or number Seconds
+  * or time-string 00:03:04.7
   * return false if error
   * unit: 's', 'm','h','d','w'
-  * basis: date basis
+  * basis: date basis, date reference: used for month and years
   * dt::totalRelTime('1 week','days'); //7
   * 
   */
@@ -1179,16 +1269,57 @@ class dt extends DateTime{
     if($basis != '2000-1-1') {
       $basis = $dateBasis->format('Y-m-d');
     }
-    if(is_string($relTime)) {
+    if(is_float($relTime) OR is_int($relTime)){
+      $fullSeconds = floor($relTime);
+      $relTime = "00:00:0".sprintf("%0.6f",$relTime-$fullSeconds)." +".$fullSeconds." Seconds";
       return $dateBasis->diffTotal($basis.' '.$relTime, $unit);
-    } elseif ($relTime instanceof DateInterval) {
-      return  $dateBasis->sub($relTime)->diffTotal($basis,$unit);
+    }
+    if(is_string($relTime)) {
+      if(!preg_match('~[a-z]~i',$relTime)){
+        //hh:ii 
+        $seconds = self::timeToSeconds($relTime);
+        if($seconds === false) {
+          trigger_error('First Parameter "'.$relTime.'" for '.__METHOD__.' is not a valid Time', E_USER_WARNING); 
+          return false;          
+        }
+        $fullSeconds = floor($seconds);
+        $relTime = "00:00:0".sprintf("%0.6f",$seconds-$fullSeconds)." +".$fullSeconds." Seconds";
+      }
+      return $dateBasis->diffTotal($basis.' '.$relTime, $unit);
+    } 
+    elseif ($relTime instanceof DateInterval) {
+      $dateTo = $dateBasis->copy()->add($relTime);
+      return $dateBasis->diffTotal($dateTo, $unit);
     } 
     trigger_error('First Parameter for '.__METHOD__.' is not a valid Time', E_USER_WARNING);    
     return false;
   }
   
-  
+ /*
+  * timeStrToSeconds: Convert a string "ii:ss,ms" to Seconds (Float)
+  * @param string time: hhh:ii hhh:ii:ss hhh:ii.ss,m ii:ss.m
+  * return Float or bool false if error
+  */
+  public static function timeToSeconds($timeString){
+    if(!preg_match('~^(\d+)(:\d{1,2}){0,2}([\.,]\d+)?$~',$timeString)) {
+      return false; 
+    }
+    $splitP = preg_split("~[.,]~",$timeString);
+    $splitDp = explode(":",$splitP[0]);
+    $seconds = 0.0;
+    foreach($splitDp as $val) {
+      $seconds = $seconds * 60 + $val;
+    }      
+    if(isset($splitP[1])){
+      //millisec
+      $seconds += (float)("0.".$splitP[1]);
+    }
+    elseif(count($splitDp) == 2) {
+      //hh:ii
+      $seconds *= 60;
+    }
+    return $seconds;
+  }
 
  /*
   * Calculated from a value (int / float) and a unit a DateInterval
@@ -1650,6 +1781,7 @@ class dt extends DateTime{
 
  /*
   * calculate Equinox (Äquinoktium primär)
+  * approximate formula
   * @params: $year integer as YYYY
   * @params: string/object $timezone
   * @return date Object
@@ -1726,9 +1858,11 @@ class dt extends DateTime{
       'microSecond' => 'u',
       'weekOfYear' => 'W',
       'daysInMonth' => 't',
+      'dayName' => 'D', //short Name Mon..Sun
     );
-    if(isset($identifier[$name])) { 
-      return (int) $this->format($identifier[$name]);
+    if(isset($identifier[$name])) {
+      $val = $this->format($identifier[$name]);      
+      return is_numeric($val) ? (int)$val : $val;
     }
     if($name == 'tzName') {
       return $this->getTimezone()->getName();
@@ -1755,7 +1889,7 @@ class dt extends DateTime{
  /*
   * create array for language translation
   * @param $locale string language 'fr','it'..
-  * @return array with config or false if error
+  * @return string with config or false if error
   */
   public static function createLanguageConfig($locale = "de")
   {
@@ -1792,7 +1926,7 @@ class dt extends DateTime{
       $refDate->modify("+1 Day");      
     }        
     
-    return array($locale => $namesMonthDays);
+    return implode(",",$namesMonthDays);
   }
     
  /*
@@ -1836,8 +1970,9 @@ class dt extends DateTime{
     return $dt;
   }
   
-  //tauscht Monat von defaultLanguage aus String -> Eng.
-  //return string wenn ok, sonst false
+  //swaps month from defaultLanguage from StrDate -> Eng.
+  //dt::translateMonth("3. Mai 1985") -> ""3. May 1985""
+  //return string if ok, otherwise false
   public static function translateMonth($strDate){
     $month = array_slice(self::$mon_days[self::$defaultLanguage],0,12);  //only month
     if(str_ireplace($month,'',$strDate) !== $strDate) {
