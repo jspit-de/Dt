@@ -1,5 +1,18 @@
 # DateTime Extension dt
 
+## Version 1.83 (2020-01-30)
+* Add method timeToSeconds
+  convert time hh:ii:ss.millisec to seconds (float)
+* totalRelTime and addTime works now also with milliseconds
+
+## Version 1.81 (2020-01-20)
+* Add method createFromSystemTime
+  dt-objects from arbitrary timestamps
+
+## Version 1.78 (2019-12-11)
+* method "totalRelTime" accept now hours>24 in the HH::ii formats
+* method "totalRelTime" extends for time formats HH:ii
+
 ## Version 1.77 (2019-12-09)
 * the replacement of wildcards extended
 
