@@ -2,8 +2,8 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.83                                                           |
-|      Date: 2020-01-30                                                     |
+|   Version: 1.84                                                           |
+|      Date: 2020-02-07                                                     |
 |       PHP: 5.3.8+                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..19, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -1130,6 +1130,20 @@ class dt extends DateTime{
   }
 
  /*
+  * calculates the difference and formats the result
+  * supports microseconds for php >= 7.1
+  * @param mixed $date 
+  * @param mixed $format: DateInterval::formats + %G, %v
+  * @return string or bool false if error
+  */  
+  public function diffFormat($date , $format) {
+    $dateTime = self::create($date);
+    if($dateTime === false) return false;
+    $diff = parent::diff($dateTime,false);
+    return self::formatDateInterval($format, $diff);
+  }
+
+ /*
   * get count of speciific weekdays between dates
   * @param mixed $dayIdentList (int 0=Sun .. 6 =Sat or string 'Sun','Mon'..'Sat'
   *  or rel.DateString or DateString or a comma separated list
@@ -1323,6 +1337,7 @@ class dt extends DateTime{
 
  /*
   * Calculated from a value (int / float) and a unit a DateInterval
+  * support microseconds for PHP >= 7.1
   * unitP: 'week', 'day','hour','minute','second'
   * return DateInterval-Object , false bei Fehler
   */
@@ -1334,18 +1349,41 @@ class dt extends DateTime{
       86400 => "days",
       604800 => "weeks",
     );
-    
-    $timeValue = (float) $timeValue;
-    
     $match = preg_grep('/^'.$unitP.'/i',$units);
     if(! is_array($match)) {
       trigger_error('Second Parameter for '.__METHOD__.' is not a valid Unit', E_USER_WARNING);
       return false;
     }
+    $timeValue = (float) $timeValue;
+    $absValue = abs($timeValue);
     $unit = reset($match);
     $faktor = array_search($unit,$units);
-    $seconds = round($timeValue * $faktor);
-    return dt::create('2000-1-1')->addSeconds(-$seconds)->diff('2000-1-1');
+    $seconds = $absValue * $faktor;
+    $fraction = sprintf('%0.6f', fmod($seconds,1));
+    $ref = date_create('2000-1-1 00:00:0'.$fraction.' UTC')->modify(floor($seconds).' Seconds');
+    $base = date_create('2000-1-1 UTC');
+    return $timeValue < 0.0 ? $ref->diff($base) : $base->diff($ref);
+  }
+
+ /*
+  * formats a DateInterval
+  * @param string $format: DateInterval::formats + %G, %v
+  * @param DateInterval $dateInterval
+  * @return string 
+  */  
+  public static function formatDateInterval($format, DateInterval $dateInterval) {
+    $days = max($dateInterval->days, $dateInterval->d);
+    $totalHours = sprintf('%d',$days * 24 + $dateInterval->h);
+    $milliseconds = isset($dateInterval->f) //php 
+      ? sprintf('%03d',$dateInterval->f*1000+0.5)
+      : 0.0
+    ;
+    $format = str_replace(
+      array('%G','%v'),
+      array($totalHours,$milliseconds),
+      $format
+    );
+    return  $dateInterval->format($format);
   }
 
  /*
@@ -1945,6 +1983,9 @@ class dt extends DateTime{
     return $this;
   }
   
+ /*
+  * modifications for string expressions
+  */
   private function santinizeDate($dt) {
     $dt = trim($dt);
     if(stripos(self::$defaultLanguage,self::DE) === 0) {
@@ -1967,6 +2008,10 @@ class dt extends DateTime{
         $dt = preg_replace('~^(\d{4} )(.+)$~u',"$2 $1",$dt);  //move YYYY to end
       }
     }
+    //reduce microseconds to a maximum of 6
+    $dt = preg_replace_callback('~\.\d{7,}~',function($match){
+      return ltrim(sprintf('%0.6F',$match[0]),'0');
+    },$dt);
     return $dt;
   }
   

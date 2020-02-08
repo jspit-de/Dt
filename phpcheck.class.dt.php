@@ -100,6 +100,14 @@ $t->start('Create Date Timezone New York');
 $date = dt::create('1.1.2014 00:00','America/New_York');
 $t->checkEqual($date->formatL('Y-m-d H:i O'), '2014-01-01 00:00 -0500');
 
+$t->start('create from Format Y-m-dTH:i:s.uZ');
+$date = dt::create('2020-02-06T17:26:38.27774Z');
+$t->checkEqual($date->format('Y-m-d H:i:s.u e'), '2020-02-06 17:26:38.277740 Z');
+
+$t->start('create from influxdb time format');
+$date = dt::create('2020-02-06T17:26:38.277740846Z');
+$t->checkEqual($date->format('Y-m-d H:i:s.u e'), '2020-02-06 17:26:38.277741 Z');
+
 $t->start('Create Date from Integer-Timestamp');
 $timeStamp = strtotime('2015-12-24');
 $date = dt::create($timeStamp);
@@ -793,6 +801,15 @@ $hours = dt::create('2019-12-08 00:00')
   ->diffTotal('2019-12-07 13:45:31','H:i');
 $t->checkEqual($hours, "-10:14");
 
+//diffFormat
+$t->start('diffFormat: total hours:minutes');
+$strDuration = dt::create("2018-03-04 08:00")->diffFormat("2018-03-06 16:15","%G:%I");
+$t->checkEqual($strDuration, "56:15");
+
+$t->start('diffFormat: min:sec.millisec');
+$strDuration = dt::create("08:00:01.500000")->diffFormat("08:12:10.750000","%I:%S.%v");
+$t->checkEqual($strDuration, "12:09.250");
+
 //diffHuman
 $t->start('diffHuman: de');
 $result = dt::create('2017-01-01')->diffHuman('2017-01-01 00:05:20','de');
@@ -952,6 +969,10 @@ $t->checkEqual($dateInterval->format("%H:%I:%S"), '00:04:30');
 $t->start('create a date_interval from float : idustrytime');
 $dateInterval = dt::date_interval_create_from_float(0.071525,'hour');
 $t->checkEqual($dateInterval->format("%H:%I:%S"), '00:04:17');
+
+$t->start('create a date_interval from float : seconds.mikrosekonds');
+$dateInterval = dt::date_interval_create_from_float(-5.125,'seconds');
+$t->checkEqual($dateInterval->format("%R%S.%F"), '-05.125000');
 
 //Timestamps
 $t->start('get a Float Timestamp 1.1.1970');
@@ -1308,6 +1329,18 @@ $t->start('setClockChange to Wintertime USA 2017');
 $date = dt::create('2017-1-1', "America/New_York")
   ->setClockChange(true);
 $t->checkEqual((string)$date, "2017-11-05 01:00:00");
+
+//formatDateInterval($format, DateInterval $dateInterval)
+$t->start('formatDateInterval HH:ii');
+$dateInterval = DateInterval::createFromDateString('3 Days 4 Hours 6 Minutes');
+$result = dt::formatDateInterval('%G:%I', $dateInterval);
+$t->checkEqual($result, "76:06");
+
+$t->start('formatDateInterval -06,125');
+$dateInterval = date_create('2000-01-01 00:00:06.125000')
+  ->diff(date_create('2000-1-1'));
+$result = dt::formatDateInterval('%R%S,%v', $dateInterval);
+$t->checkEqual($result, "-06,125");
 
 /*
  * End Tests 
