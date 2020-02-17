@@ -2,11 +2,11 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.84                                                           |
-|      Date: 2020-02-07                                                     |
-|       PHP: 5.3.8+                                                         |
+|   Version: 1.85                                                           |
+|      Date: 2020-02-17                                                     |
+|       PHP: 5.6+                                                           |
 | ------------------------------------------------------------------------- |
-| Copyright © 2014..19, Peter Junk (alias jspit). All Rights Reserved.      |
+| Copyright © 2014..20, Peter Junk (alias jspit). All Rights Reserved.      |
 ' ------------------------------------------------------------------------- '
  */
 
@@ -250,6 +250,11 @@ class dt extends DateTime{
     }
     if(is_string($timeZone)) {
       $timeZone = new DateTimeZone($timeZone);
+    }
+    //translate monthname if format contain F or M
+    if(strpbrk($format,"FM") !== false) {
+      $timeEn = self::translateMonth($time);
+      if($timeEn !== false) $time = $timeEn;     
     }
     $dt = parent::createFromFormat($format, $time , $timeZone);
     if($dt === false) return false;
@@ -814,7 +819,6 @@ class dt extends DateTime{
   public function getDayMinutes() {
     return parent::format('H') * 60 + parent::format('i');
   }
-
   
  /*
   * return numeric representation of the quarter (1..4)
@@ -824,6 +828,15 @@ class dt extends DateTime{
     return (int)$quarter;
   }
 
+ /*
+  * return int age = diff in years from date to now
+  */
+  public function age($timeToZero = false) {
+    if(!$timeToZero) return $this->diff()->y;
+    return $this->copy()->setTime(0)->diff()->y;
+  }
+
+  
  /*
   * return the average Date between current Date and refDate
   */
@@ -963,6 +976,47 @@ class dt extends DateTime{
     }
     return $this->copy()->cut($interval)->diffTotal($this, $unitP);
   }
+
+ /*
+  * provides a copy of the smallest date
+  * @param $dates : a array of dates or date1,[date2,..]
+  * @return: dt-object
+  */  
+  public function min(...$dates) {
+    return min($this->handleParametersMinMax($dates,__METHOD__));    
+  }
+
+ /*
+  * provides a copy of the biggest date
+  * @param $dates : a array of dates or date1,[date2,..]
+  * @return: dt-object
+  */  
+  public function max(...$dates) {
+    return max($this->handleParametersMinMax($dates,__METHOD__));
+  }
+  
+  //internal
+  private function handleParametersMinMax(array $dates, $methodName){
+    if(array_key_exists(0,$dates) AND is_array($dates[0])){
+      $dates = $dates[0];
+    }
+    foreach($dates as $key => $date){
+      if(is_string($date) and substr($date,0,2) == "->"){
+        //string start with "->" then use copy and chain
+        $date = $this->copy()->chain(substr($date,2));
+      }
+      else {
+        $date = self::create($date,$this->getTimeZone());
+      }
+      if($date === false) {
+        throw new Exception('Parameter for '.$methodName.' is not a valid date');
+      }
+      $dates[$key] = $date;
+    }
+    $dates[] = $this->copy();
+    return $dates;
+  }  
+
   
  /* 
   * return DateInterval object
@@ -1147,31 +1201,39 @@ class dt extends DateTime{
   * get count of speciific weekdays between dates
   * @param mixed $dayIdentList (int 0=Sun .. 6 =Sat or string 'Sun','Mon'..'Sat'
   *  or rel.DateString or DateString or a comma separated list
+  *  null or 'all' is a short for '0,1,2,3,4,5,6'
   * @param mixed $dateTo: string, timestamp or object
   * @param bool $excludeDateTo exclude the top Date
   * $return int, bool false if error
   */
-  public function countDaysTo($dayIdentList, $dateTo, $excludeDateTo = false){
-    $weekDays = explode(",",$dayIdentList);
-    foreach($weekDays as &$dayIdent) {
-      $dayIdent = trim($dayIdent);
-      if(is_numeric($dayIdent)) {
-        $dayIdent = (int)$dayIdent;
+  public function countDaysTo($dayIdentList, $dateTo, $excludeDateTo = false) {
+    $dayIdentList = strtolower($dayIdentList);
+    if($dayIdentList !== 'all' AND $dayIdentList !== "") {
+      $weekDays = explode(",",$dayIdentList);
+      foreach($weekDays as &$dayIdent) {
+        $dayIdent = trim($dayIdent);
+        if(is_numeric($dayIdent)) {
+          $dayIdent = (int)$dayIdent;
+        }
+        elseif(is_string($dayIdent)) {
+          $wDate = date_create($dayIdent);
+          $dayIdent = $wDate ? (int)($wDate->format('w')) : false;
+        }
+        else {
+          $dayIdent = false;
+        }
+        if($dayIdent < 0 or $dayIdent > 6 or $dayIdent === false) {
+          trigger_error(
+            'Error Method '.__METHOD__.', invalid Parameter $dayIdent in '. self::backtraceFileLine(),
+            E_USER_WARNING
+          );
+          return false;
+        }
       }
-      elseif(is_string($dayIdent)) {
-        $wDate = date_create($dayIdent);
-        $dayIdent = $wDate ? (int)($wDate->format('w')) : false;
-      }
-      else {
-        $dayIdent = false;
-      }
-      if($dayIdent < 0 or $dayIdent > 6 or $dayIdent === false) {
-         trigger_error(
-          'Error Method '.__METHOD__.', invalid Parameter $dayIdent in '. self::backtraceFileLine(),
-          E_USER_WARNING
-        );
-        return false;
-      }
+    }
+    else {
+      //all days of week
+      $weekDays = [0,1,2,3,4,5,6];
     }
     $start = $this->copy()->setTime(0,0,0);
     $dateTo = self::create($dateTo);
@@ -2027,8 +2089,10 @@ class dt extends DateTime{
     //check short Month
     $shortMonth = array_map(array('self','substr3'),$month);
     $shortMonthEN = array_map(array('self','substr3'),self::$mon_days[self::EN_PHP]);
-    if(str_ireplace($shortMonth,'',$strDate) !== $strDate) {
-      return str_ireplace($shortMonth, $shortMonthEN,$strDate);
+    foreach($shortMonth as $key => $curMon){
+      if(preg_match('~\b'.$curMon.'\w*~iu',$strDate,$match)){
+        return str_replace($match[0],$shortMonthEN[$key], $strDate);
+      }  
     }
     return false;
   }
@@ -2152,4 +2216,15 @@ class dt extends DateTime{
       $pattern
     );
   }
+  
+ /*
+  * for Test and Development
+  */
+  public static function getTranslateArray($language = null){
+    if($language === null) $language = self::$defaultLanguage;
+    if(array_key_exists($language,self::$mon_days)) {
+      return self::$mon_days[$language];
+    }
+    return false;  
+  }  
 }
