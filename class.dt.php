@@ -2,8 +2,8 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.85                                                           |
-|      Date: 2020-02-17                                                     |
+|   Version: 1.89                                                           |
+|      Date: 2020-09-27                                                     |
 |       PHP: 5.6+                                                           |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..20, Peter Junk (alias jspit). All Rights Reserved.      |
@@ -173,16 +173,22 @@ class dt extends DateTime{
   
  /*
   * parse a string with a DateTime information with regular expressions
+  * regExFormat: string or array with regular Expressions
   * dateStr: String with date information
   * named identifier: <d> Tag, <m> Monat, <Y> Jahr(4 Ziff), <H> Stunde, <i> Minute, <s> Sekunde
   * Example: '~^(?<d>\d{1,2})/(?<m>\d{1,2})/(?<y>\d\d)~';
   * timeZone: String or Object, NULL -> date_default_timezone_get()
   * dateTemplate: String or Object, the template provides the missing information   
   */
-  public static function createFromRegExFormat($regExFormat,$dateStr,$timeZone = null, $dateTemplate = 'today') {
-    if(! preg_match($regExFormat,(string)$dateStr,$match)) {
-      return false;
+  public static function createFromRegExFormat($regExFormats,$dateStr,$timeZone = null, $dateTemplate = 'today') {
+    if(is_string($regExFormats)) {
+      $regExFormats = [$regExFormats];
     }
+    $ok = false;
+    foreach($regExFormats as $regExFormat){
+      if($ok = preg_match($regExFormat,(string)$dateStr,$match)) break;
+    }
+    if(! $ok) return false;
     //remove empty elements
     $match = array_filter($match);
     //TimeZone
@@ -238,12 +244,12 @@ class dt extends DateTime{
 
  /*
   * Parses a time string according to a specified format
-  * $format string Format 
+  * $format string Format or array with formats 
   * $time string representing the time
   * $timezone dateTimeZone object or string, defeault null for default Timezone
   * Returns a new dt instance or FALSE on failure.
   */
-  public static function createDtFromFormat($format, $time , $timeZone = null )
+  public static function createDtFromFormat($formats, $time , $timeZone = null )
   {
     if($timeZone === null) {
         $timeZone = date_default_timezone_get();
@@ -251,20 +257,28 @@ class dt extends DateTime{
     if(is_string($timeZone)) {
       $timeZone = new DateTimeZone($timeZone);
     }
-    //translate monthname if format contain F or M
-    if(strpbrk($format,"FM") !== false) {
-      $timeEn = self::translateMonth($time);
-      if($timeEn !== false) $time = $timeEn;     
+    if(is_string($formats)) {
+      $formats = [$formats];
     }
-    $dt = parent::createFromFormat($format, $time , $timeZone);
-    if($dt === false) return false;
-    if(self::$strictModeCreate) {
-      $errInfo = $dt->getLastErrors();
-      if( $errInfo['warning_count']+$errInfo['error_count'] > 0 ) {
-        return false;
+    $ok = false;
+    foreach($formats as $format){
+      //translate monthname if format contain F or M
+      if(strpbrk($format,"FM") !== false) {
+        $timeEn = self::translateMonth($time);
+        if($timeEn !== false) $time = $timeEn;     
       }
+      $dt = parent::createFromFormat($format, $time , $timeZone);
+      if($dt === false) continue;
+      if(self::$strictModeCreate) {
+        $errInfo = $dt->getLastErrors();
+        if( $errInfo['warning_count']+$errInfo['error_count'] > 0 ) {
+          continue;
+        }
+      }
+      $ok = true;
+      break;
     }
-    return new static($dt);
+    return $ok ? new static($dt) : false;
   }
 
  /*
@@ -395,7 +409,35 @@ class dt extends DateTime{
     }
     return $date->addSeconds(round($time * $resolution))
       ->setTimeZone($timeZone);
-  }  
+  }
+
+ /*
+  * Convert date from Calendar to Gregorian 
+  * @param string $calendar
+  * Japanese,Buddhist,Chinese,Persian,Indian,Islamic,Hebrew,Indian,Coptic,Ethiopic
+  */
+  public function toGregorianFrom($calendar){
+    if(!extension_loaded('intl')){
+      throw new Exception(__METHOD__.' need the Intl Extension'); 
+    }  
+    $tz = $this->tzName;
+    $cal = IntlCalendar::createInstance($tz, "en_US@calendar=".$calendar);
+    if(strtolower($cal->getType()) == 'gregorian') {
+      throw new Exception("invalid Parameter '".$calendar."' for ".__METHOD__);  
+    }
+    $dateArr = explode(" ",$this->format('Y n j H i s'));
+    $cal->set((int)$dateArr[0],$dateArr[1]-1,(int)$dateArr[2],(int)$dateArr[3],(int)$dateArr[4],(int)$dateArr[5]);
+    $formatter = IntlDateFormatter::create("en_US",
+      IntlDateFormatter::SHORT, 
+      IntlDateFormatter::MEDIUM,
+      $tz, 
+      IntlDateFormatter::GREGORIAN,
+      "YYYY-M-d HH:mm:ss"
+    );
+    $strDate = $formatter->format($cal);
+    parent::__construct($strDate, new DateTimeZone($tz));
+    return $this;
+  }
   
  /*
   * get a Microsoft Timestamp (days since Dec 31 1899)
@@ -664,7 +706,7 @@ class dt extends DateTime{
       $day = (int)$mdate->format('d');
     }
     elseif($par instanceof DateTime) {
-      //extract time from $par
+      //extract date from $par
       $year = (int)$par->format('Y');
       $month = (int)$par->format('m');
       $day = (int)$par->format('d');
@@ -678,6 +720,16 @@ class dt extends DateTime{
     
     parent::setDate($year, $month, $day);
     return $this;
+  }
+
+ /*
+  * set Date, Time and Timezone from dt or DateTime-Object
+  * @param DateTime $dt
+  * @return $this
+  */  
+  public function setDateTimeFrom(DateTime $dt){
+    parent::__construct($dt->format('Y-m-d H:i:s.u'),$dt->getTimeZone());
+    return $this;     
   }
   
  /*
@@ -717,6 +769,50 @@ class dt extends DateTime{
     }      
     $modifier = static::passover($year)->format("Y-m-d H:i:s");  
     return parent::modify($modifier);
+  }
+
+ /*
+  * set Time to sunset of this Day
+  * @param $lat array [$lat, $lon, $zenith] or float latitude 
+  * @param $lon float Longitude
+  * @param $zenith float zenith
+  */
+  public function setSunset($lat = null, $lon = null, $zenith = null){
+    if(is_array($lat)){
+      list($lat,$lon,$zenith) = array_merge(array_values($lat),[null,null,null]);  
+    }
+    $location = $this->getTimezone()->getLocation();
+    $tsSunset = date_sunset(
+      $this->getTimeStamp(),
+      SUNFUNCS_RET_TIMESTAMP,
+      $lat ?: $location["latitude"],
+      $lon ?: $location["longitude"],
+      $zenith ?: ini_get('date.sunset_zenith')
+    );
+    $this->setTimeStamp($tsSunset);
+    return $this;
+  }
+
+ /*
+  * set Time to sunrise of this Day
+  * @param $lat array [$lat, $lon, $zenith] or float latitude 
+  * @param $lon float Longitude
+  * @param $zenith float zenith
+  */
+  public function setSunrise($lat = null, $lon = null, $zenith = null){
+    if(is_array($lat)){
+      list($lat,$lon,$zenith) = array_merge(array_values($lat),[null,null,null]);  
+    }
+    $location = $this->getTimezone()->getLocation();
+    $tsSunrise = date_sunrise(
+      $this->getTimeStamp(),
+      SUNFUNCS_RET_TIMESTAMP,
+      $lat ?: $location["latitude"],
+      $lon ?: $location["longitude"],
+      $zenith ?: ini_get('date.sunrise_zenith')   
+    );
+    $this->setTimeStamp($tsSunrise);
+    return $this;
   }
 
   
@@ -983,7 +1079,12 @@ class dt extends DateTime{
   * @return: dt-object
   */  
   public function min(...$dates) {
-    return min($this->handleParametersMinMax($dates,__METHOD__));    
+    $min = min($this->handleParametersMinMax($dates,__METHOD__));
+    if($min < $this) {
+      parent::__construct($min->format('Y-m-d H:i:s.u'),$min->getTimeZone());
+    }
+    return $this;
+      
   }
 
  /*
@@ -992,7 +1093,11 @@ class dt extends DateTime{
   * @return: dt-object
   */  
   public function max(...$dates) {
-    return max($this->handleParametersMinMax($dates,__METHOD__));
+    $max =  max($this->handleParametersMinMax($dates,__METHOD__));
+    if($max > $this) {
+      parent::__construct($max->format('Y-m-d H:i:s.u'),$max->getTimeZone());
+    }
+    return $this;
   }
   
   //internal
@@ -1001,9 +1106,9 @@ class dt extends DateTime{
       $dates = $dates[0];
     }
     foreach($dates as $key => $date){
-      if(is_string($date) and substr($date,0,2) == "->"){
-        //string start with "->" then use copy and chain
-        $date = $this->copy()->chain(substr($date,2));
+      if(is_string($date) and substr($date,0,1) == "|"){
+        //string start with "|" then use copy and chain
+        $date = $this->copy()->chain(substr($date,1));
       }
       else {
         $date = self::create($date,$this->getTimeZone());
@@ -1013,7 +1118,7 @@ class dt extends DateTime{
       }
       $dates[$key] = $date;
     }
-    $dates[] = $this->copy();
+    array_unshift($dates, $this);
     return $dates;
   }  
 
@@ -1027,7 +1132,8 @@ class dt extends DateTime{
       return parent::diff($date, $absolute);
     }
     $dateTime = self::create($date);
-    return parent::diff($dateTime, $absolute);
+    $interval = parent::diff($dateTime, $absolute);
+    return class_exists('DtInterval') ? DtInterval::create($interval) : $interval;
   }
 
  /*
@@ -1540,13 +1646,22 @@ class dt extends DateTime{
   */ 
   public function setYear($newYear = false) {
     list($month, $day) = explode(':',$this->format('m:d'));
-    
-    if(is_bool($newYear)) $year = date('Y');
-    elseif($newYear instanceof DateTime){
-      $year = $newYear->format('Y');
+    if(is_int($newYear)) {
+      $year = $newYear;
     }
-    else $year = (int)$newYear;
-    if($newYear === true AND $month.$day < date('md')) $year++;
+    else{
+      $tz = parent::getTimeZone();
+      $now = date_create('now', $tz);
+      if(is_bool($newYear)) $year = $now->format('Y');
+      elseif($newYear instanceof DateTime){
+        $year = $newYear->format('Y');
+      }
+      elseif(is_string($newYear) AND ($date = date_create($newYear, $tz)) !== false){
+        $year = (int)$date->format("Y"); 
+      }
+      else $year = (int)$newYear;
+      if($newYear === true AND $month.$day < $now->format('md')) $year++;
+    }
     parent::setDate($year, $month, $day);
     return $this;
   }
