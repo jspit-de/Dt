@@ -1,12 +1,35 @@
 # DateTime Extension dt
 
+## Version 1.89 (2020-09-27)
+* Added method setSunrise
+* Added method setSunset
+* Redesign method createFromRegExFormat (now accepts an array of formats)
+* Redesign method createDtFromFormat (now accepts an array of formats)
+
+## Version 1.88 (2020-04-09)
+* Redesign method diff
+
+## Version 1.87 (2020-03-31)
+* Method toGregorianFrom added
+* Method setDateTimeFrom added
+* Redesign method setYear
+
+## Version 1.86 (2020-03-22)
+* Methods min and max added
+
+## Version 1.85 (2020-02-17)
+* Redesign method translateMonth
+* Method createDtFromFormat now support languages
+* Added getTranslateArray() method for testing and development
+
+
 ## Version 1.83 (2020-01-30)
-* Add method timeToSeconds
+* Added method timeToSeconds
   convert time hh:ii:ss.millisec to seconds (float)
 * totalRelTime and addTime works now also with milliseconds
 
 ## Version 1.81 (2020-01-20)
-* Add method createFromSystemTime
+* Added method createFromSystemTime
   dt-objects from arbitrary timestamps
 
 ## Version 1.78 (2019-12-11)
@@ -17,7 +40,7 @@
 * the replacement of wildcards extended
 
 ## Version 1.76 (2019-11-30)
-* added methods isPast(), isFuture()
+* Added methods isPast(), isFuture()
 
 ## Version 1.75 (2019-11-18)
 * added human units for the French language
