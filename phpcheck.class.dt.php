@@ -1,6 +1,5 @@
 <?php
-//last modify: 2020-01-22
-//check for class dt v1.83
+//last modify: 2020-09-26 
 error_reporting(-1);
 ini_set('display_errors', 1);
 header('Content-Type: text/html; charset=UTF-8');
@@ -17,10 +16,10 @@ $t->setOutputOnlyErrors(!empty($_GET['error']));
  */
 require '../class/class.dt.php';
 
-//für class.dt.php ab version 1.83
+//für class.dt.php ab version 1.85
 $t->start('check class version');
 $info = $t->getClassVersion("dt");
-$t->check($info, !empty($info) AND $info >= 1.83);
+$t->check($info, !empty($info) AND $info >= 1.89);
 
 $t->start('set default Timezone and Language');
 dt::default_timezone_set('Europe/Berlin');
@@ -33,6 +32,7 @@ $t->checkEqual($result,'de');
 
 //create
 $t->start('Create current Time (Now)');
+// create dates
 $dt = dt::create('now');
 $ok = $dt->format('Y-m-d H:i:s') == date_create('now')->format('Y-m-d H:i:s');
 $t->check($dt, $ok);
@@ -124,8 +124,13 @@ $date = dt::create(35573107125.25);
 $expected = '3097-04-07 19:38:45.250000';
 $t->checkEqual($date->formatL('Y-m-d H:i:s.u'), $expected);
 
+$t->start('Create Date from a Javascript Milliseconds Timestamp');
+$timeStamp = 1393161787500;
+$date = dt::create($timeStamp/1000);
+$t->checkEqual($date->toStringWithMicro(),"2014-02-23 14:23:07.500000");
+
 $t->start('Create Date from a big negativ Float Timestamp');
-$date = dt::create(-22144582800.);
+$date = dt::create(-22144579200.,'UTC');
 $t->checkEqual((string)$date, '1268-04-07 00:00:00');
 
 $t->start('Create from int arguments yaer, month..');
@@ -153,7 +158,7 @@ $t->start('Create Today with Wildcards');
 $date = dt::create("{{Y-m-d}} 00:00");
 $t->checkEqual((string)$date, (string)dt::create("Today"));
 
-$t->start('Create easter date this year with Wildcard');
+$t->start('Create easter date this year');
 $date = dt::create("{{easter}}");
 $expected = dt::create("Today")->setEasterDate();
 $t->checkEqual((string)$date, (string)$expected);
@@ -182,11 +187,60 @@ $t->checkEqual((string)$date, "2017-08-05 13:30:00");
 
 //create Dt from format
 $t->start('crate dt from format');
-$input     = "2020-01-07T11:55:34:438 GMT+0600";
+$input     = "Apr 19 '15 at 13:56";
+$format = "M j 'y ?? H:i";
+$dt = dt::createDtFromFormat($format, $input);
+$result = $dt ? (string)$dt : $dt;
+$t->checkEqual($result, "2015-04-19 13:56:00"); 
+
+$t->start('crate dt from format');
+$input = "2020-01-07T11:55:34:438 GMT+0600";
 $format = 'Y-m-d\Th:i:s:u \G\M\TO';
 $dt = dt::createDtFromFormat($format, $input);
-$result = $dt->format($format);
+$result = $dt ? $dt->format($format) : $dt;
 $t->checkEqual($result, "2020-01-07T11:55:34:438000 GMT+0600");
+
+$t->start('crate dt from format with array of formats');
+$input = '7/1/2018';
+$formats = ['!Y/m/d','!m/d/Y'];
+$dt = dt::createDtFromFormat($formats,$input);
+$t->checkEqual((string)$dt, "2018-07-01 00:00:00");
+
+$t->start('crate dt from format strict mode');
+dt::setStrictModeCreate(true);
+$input = "13 2017";  //13 is a invalid month
+$dt = dt::createDtFromFormat("!n Y", $input);
+$t->checkEqual($dt, false);
+
+$t->start('crate dt from format non strict mode');
+dt::setStrictModeCreate(false); //default false
+$input = "13 2017";
+$dt = dt::createDtFromFormat("!n Y", $input);
+$result = $dt ? (string)$dt : $dt;
+$t->checkEqual($result, "2018-01-01 00:00:00");
+
+$t->start('crate dt from format with french Month');
+$input = "7 Août 2020";
+dt::setDefaultLanguage('fr');
+$dt = dt::createDtFromFormat("!d M Y", $input);
+$result = $dt ? (string)$dt : $dt;
+$t->checkEqual($result, "2020-08-07 00:00:00");
+
+
+//reset DefaultLanguage
+dt::setDefaultLanguage('de');
+
+$t->start('createFromIntlFormat');
+$input = "21 Août 2020";
+$dt = dt::createFromIntlFormat('d MMMM yyyy',$input,'Europe/Paris','fr'); 
+$result = $dt ? (string)$dt : $dt;
+$t->checkEqual($result, "2020-08-21 00:00:00");
+
+$t->start('createFromIntlFormat th@calendar=buddhist');
+$input = "17 มกราคม 2507";  //January 17, 1964
+$dt = dt::createFromIntlFormat('d MMMM yyyy',$input,"Asia/Bangkok",'th@calendar=buddhist'); 
+$result = $dt ? (string)$dt : $dt;
+$t->checkEqual($result, "1964-01-17 00:00:00");
 
 $t->start('crate from Julian Date Number');
 $date = dt::createFromJD(2458294.65168,"UTC");
@@ -229,6 +283,22 @@ $timeStamp = 43850.428414352;
 $date = dt::createFromSystemTime($timeStamp,'Dec 30 1899','1 Day',"UTC");
 $expected = "2020-01-20 10:16:55";
 $t->checkEqual((string)$date, $expected);
+
+$t->start('convert c# DateTime.ToBinary() to DateTime');
+$numFromCsharp = -8586307756854775808;  //2 bit kind + 62 bit ticks
+//remove kind bits
+$removeKindBits = function($num){
+  if(PHP_INT_SIZE > 4) return (int)$num & 0x3fffffffffffffff;
+  if($num < 0) $num += 9223372036854775808;
+  $b2 = 4611686018427387903;
+  if($num > $b2) $num -= $b2;
+  return $num;
+};
+$ticks = $removeKindBits($numFromCsharp);
+$date = dt::createFromSystemTime($ticks,'0001-1-1',1.E-7,"UTC");
+$expected = "2019-10-11 22:00:00";
+$t->checkEqual((string)$date, $expected);
+
 
 //
 $t->start('Create Date from not valid String');
@@ -283,8 +353,20 @@ $expected = array (
 );
 $t->checkEqual($matches,$expected);
 
+$t->start('Create date using a array of regular expressions');
+$regEx = [
+  '~^(?<d>\d{2})/(?<m>\d{2})/(?<Y>\d{4})$~',
+  '~^(?<d>\d{2})/(?<M>\p{L}+)/(?<Y>\d{4})$~iu'
+];
+$date1 = dt::createFromRegExFormat($regEx , "18/Feb/2020");
+$date2 = dt::createFromRegExFormat($regEx , "05/07/1968");
+$result = $date1.'|'.$date2;
+$expected = '2020-02-18 00:00:00|1968-07-05 00:00:00';
+$t->checkEqual($result,$expected);
+
 //formatL
 $t->start('format with German short Weekday');
+// format dates 
 $strDate = dt::create('2014-12-20')->formatL('D, d.m.Y');
 $t->checkEqual($strDate,'Sam, 20.12.2014');
 
@@ -330,7 +412,8 @@ $lang = "ir_IR@calendar=persian";
 $date = dt::create("2018-2-19")->formatIntl($icuFormat,$lang); 
 $t->checkEqual($date, "1396-11-30");
 
-$t->start('Input in Russian');  
+$t->start('Input in Russian');
+// date from strings given in various languages
 dt::setDefaultLanguage('ru');
 $date = dt::create("1 октября 1990");
 $t->check($date, $date == dt::create("1990-10-01"));
@@ -339,6 +422,21 @@ $t->start('Input in danish');
 dt::setDefaultLanguage('DA');
 $date = dt::create("3. maj 2018 06:39");
 $t->check($date, $date == dt::create("2018-05-03 06:39:00"));
+
+$t->start('createDtFromFormat with with Finnish month name');
+dt::setDefaultLanguage('fi');
+$input = "18/Helmi/2020";
+$date = dt::createDtFromFormat('|d/M/Y', $input);
+$t->check($date, $date == dt::create("2020-02-18 00:00:00"));
+
+$t->start('createFromRegExFormat with with Estonian month name');
+dt::setDefaultLanguage('et');  //estnisch
+$str = '26/Veebr/2005/13:45'; 
+$regEx = '~(?<d>\d{1,2})/(?<M>\w+)/(?<Y>\d{4,4})/(?<H>\d{1,2}):(?<i>\d{1,2})~'; 
+$date = dt::createFromRegExFormat($regEx,$str);
+$result = $date ? $date->formatL('l, d.F Y H:i') : "Error";
+$expected = "laupäev, 26.veebruar 2005 13:45";
+$t->checkEqual($result, $expected);
 
 //set default for checks
 dt::setDefaultLanguage('de');
@@ -371,6 +469,7 @@ $t->checkEqual($strDate,'mercredi, 14 janvier 2015');
 
 //setTime
 $t->start('setTime(): set the time for a date');
+// Time manipulation with setTime
 $date =dt::create('4.6.2011 18:00')->setTime(9,15);
 $t->checkEqual((string)$date,'2011-06-04 09:15:00');
 
@@ -423,6 +522,7 @@ $t->checkEqual((string)$date, '2011-01-01 05:45:10');
 
 //setDate
 $t->start('setDate: set the year');
+// Manipulate the date with setDate
 $date = dt::create('2011-1-1 13:45')->setDate(2015);
 $t->checkEqual((string)$date, '2015-01-01 13:45:00');
 
@@ -452,7 +552,17 @@ $dateObject = dt::create("2015/5/16");
 $dateWithTime = dt::create('2011-1-1 13:45')->setYear($dateObject);
 $t->checkEqual((string)$dateWithTime, '2015-01-01 13:45:00');
 
-$t->start('setYear: get current year');
+$t->start('setYear: get year from a date string');
+$strDate = "2016-12-24 18:54";
+$dateWithTime = dt::create('2011-3-12 11:45:10')->setYear($strDate);
+$t->checkEqual((string)$dateWithTime, '2016-03-12 11:45:10');
+
+$t->start('setYear: get year from a relative date string');
+$dateWithTime = dt::create('2011-3-12 11:45:10')->setYear('next year');
+$expected = (date('Y')+1).'-03-12 11:45:10'; 
+$t->checkEqual((string)$dateWithTime, $expected);
+
+$t->start('setYear: use current year');
 $dateWithTime = dt::create('2011-06-12 14:15')->setYear();
 $t->checkEqual((string)$dateWithTime, date('Y').'-06-12 14:15:00');
 
@@ -468,6 +578,13 @@ $t->start('set the ISOweek');
 $date =dt::create('2014-5-6 07:04:30')->setISOweek(51);
 $t->checkEqual((string)$date, '2014-12-15 07:04:30');
 
+$t->start('setDateTimeFrom DateTime');
+$dateTime = date_create('2019-08-31 UTC');
+$date = dt::create('1988-01-02 11:24','Europe/Berlin')
+  ->setDateTimeFrom($dateTime);
+$testOk = ($date == $dateTime AND $date !== $dateTime);
+$t->check($date->format('Y-m-d H:i:s.u e'), $testOk);
+
 //get..
 $t->start('get Seconds of Day');
 $seconds = dt::create('2014-5-6 07:04:30')->getDaySeconds();
@@ -482,8 +599,22 @@ $microSeconds = dt::create('2014-5-6 07:04:30.25')->getMicroSeconds();
 $t->checkEqual($microSeconds, 250000);
 
 $t->start('get count Days after 0001-01-01');
-$dayCount = dt::create('18.12.2014')->toDays();
+$dayCount = dt::create('18.12.2014','UTC')->toDays();
 $t->checkEqual($dayCount, 735585);
+
+$t->start('get age in years');
+$age = dt::create('now -14 years')->age();
+$t->checkEqual($age, 14);
+
+$t->start('get age in years with time 23:59');
+$date = dt::create('now -14 years')->setTime('23:59:59');
+$age = $date->age();
+$t->checkEqual($age, 13);
+
+$t->start('get age in years with time 23:59 and param true');
+$date = dt::create('now -14 years')->setTime('23:59:59');
+$age = $date->age(true);  //true set time for age to 00:00
+$t->checkEqual($age, 14);
 
 //countDaysTo
 $t->start('get count Sundays between 31.8.-9.9.19');
@@ -525,6 +656,10 @@ $t->checkEqual($result, 1);
 $t->start('Count all weekdays in October 2019, Mon-Fri as Numbers 1..5');
 $result = dt::create('2019-10-01')->countDaysTo('1,2,3,4,5','2019-10-31');
 $t->checkEqual($result, 23);
+
+$t->start('Count all days in October 2019');
+$result = dt::create('2019-10-01')->countDaysTo('all','2019-10-31');
+$t->checkEqual($result, 31);
 
 $t->start('get count with wrong day');
 $t->setErrorLevel(0);//error reporting off for next 2 tests
@@ -609,7 +744,7 @@ $result = dt::create('2018-06-25 03:38:25 UTC')->toJD();
 $t->checkEqual($result,2458294.6516782);
 
 $t->start('get JD from old date');
-$result = dt::create('1695-11-25 13:00')->toJD();
+$result = dt::create('1695-11-25 12:00','UTC')->toJD();
 $expect = (float)gregoriantojd ( 11 , 25 , 1695 );
 $t->checkEqual($result,$expect);
 
@@ -713,7 +848,39 @@ $t->start('getModulo: get float Rest after cut 10 Minutes in Seconds');
 $result = dt::create('2013-12-18 03:48:30')->getModulo('10 Minutes',"seconds");
 $t->checkEqual((int)$result, 8 * 60 + 30);
 
-//
+//min and max
+$t->start('min: get smallest date');
+$result = dt::create('2013-12-18')->min('2013-12-17');
+$t->checkEqual((string)$result, '2013-12-17 00:00:00');
+
+$t->start('max: get biggest date');
+$result = dt::create('2013-12-18')->max('2013-12-17','2013-11-17');
+$t->checkEqual((string)$result, '2013-12-18 00:00:00');
+
+$t->start('max: modify date object');
+$date = dt::create('2013-12-18');
+$date->max('2013-12-19','2013-11-17');
+$t->checkEqual((string)$date, '2013-12-19 00:00:00');
+
+$t->start('min: use relative date format basis now');
+$result = dt::create('2008-01-01')->max('+1 Day');
+$expected = date_create('now +1 Day')->format('Y-m-d H:i:s');
+$t->checkEqual((string)$result, $expected);
+
+$t->start('min: use relative date format basis self');
+$result = dt::create('2008-01-01 12:13:14')->max('|+1 Day','|+25 Hours');
+$expected = '2008-01-02 13:13:14';
+$t->checkEqual((string)$result, $expected);
+
+$t->setErrorLevel(0);//error reporting off for this test 
+$t->start('min: bad Date -> exception');
+$closure = function(){
+  $result = dt::create('2013-12-18')->min('2013.12.17');
+};
+$t->checkException($closure);
+$t->restoreErrorLevel(); 
+
+//diff
 $t->start('diff: with DateTime');
 $dateTo = new DateTime('2013-12-18 00:15:00');
 $result = dt::create('2013-12-18')->diff($dateTo)->i;  //Minutes
@@ -807,6 +974,7 @@ $strDuration = dt::create("2018-03-04 08:00")->diffFormat("2018-03-06 16:15","%G
 $t->checkEqual($strDuration, "56:15");
 
 $t->start('diffFormat: min:sec.millisec');
+//Error for PHP < 7.0
 $strDuration = dt::create("08:00:01.500000")->diffFormat("08:12:10.750000","%I:%S.%v");
 $t->checkEqual($strDuration, "12:09.250");
 
@@ -971,6 +1139,7 @@ $dateInterval = dt::date_interval_create_from_float(0.071525,'hour');
 $t->checkEqual($dateInterval->format("%H:%I:%S"), '00:04:17');
 
 $t->start('create a date_interval from float : seconds.mikrosekonds');
+//Error for PHP < 7.1: no support for Microseconds and %F
 $dateInterval = dt::date_interval_create_from_float(-5.125,'seconds');
 $t->checkEqual($dateInterval->format("%R%S.%F"), '-05.125000');
 
@@ -980,8 +1149,8 @@ $timeStamp = dt::create('1970-01-01','UTC')->getMicroTime();
 $t->checkEqual($timeStamp, 0.0);
 
 $t->start('get a Timestamp before 1970');
-$timeStamp = dt::create('1716-12-24')->getMicroTime();
-$t->checkEqual($timeStamp, -7984573200.);
+$timeStamp = dt::create('1716-12-24','UTC')->getMicroTime();
+$t->checkEqual($timeStamp, -7984569600.);
 
 $t->start('get a Timestamp after 2038');
 $timeStamp = dt::create('2065-06-12')->getMicroTime();
@@ -1032,7 +1201,24 @@ $t->start('set date 1626 to easter orthodox');
 $easterDate =  dt::create("1626-1-1")->setEasterDate(dt::EASTER_EAST);
 $t->checkEqual((string)$easterDate, '1626-04-19 00:00:00');
 
+//sunset + sunrise
+$t->start('sunrise at 24 sep 2020 Berlin');
+$location = [52.520008, 13.404954]; //lat lon Berlin
+$dt = dt::create('24 sep 2020')->setSunrise($location);
+$t->checkEqual((string)$dt, '2020-09-24 06:56:32');
 
+$t->start('sunset at 24 sep 2020 Berlin');
+$dt = dt::create('24 sep 2020')->setSunset(52.520008, 13.404954);
+$t->checkEqual((string)$dt, '2020-09-24 18:59:56');
+
+$t->start('sunset at 24 sep 2020 Cologne');
+$location = [50.937932, 6.953777];
+$dt = dt::create('24 sep 2020')->setSunset($location);
+$t->checkEqual((string)$dt, '2020-09-24 19:25:43');
+
+$t->start('sunset at 24 sep 2020, location from timezone');
+$dt = dt::create('24 sep 2020','Europe/Berlin')->setSunset();
+$t->checkEqual((string)$dt, '2020-09-24 19:00:05');
 
 $t->start('get date to first day of Passover 2018');
 $passoverDate2018 = dt::Passover(2018);
@@ -1041,6 +1227,29 @@ $t->checkEqual((string)$passoverDate2018, '2018-03-31 00:00:00');
 $t->start('set date to first day of Passover 2019');
 $passoverDate2019 = dt::create("2019-1-1")->setPassoverDate();
 $t->checkEqual((string)$passoverDate2019, '2019-04-20 00:00:00');
+
+//calender convert
+$t->start('convert Date from Indian Calendar');
+$indianDate = "1942-07-03";
+$dt = dt::create($indianDate)->toGregorianFrom('Indian');
+$t->checkEqual((string)$dt, '2020-09-25 00:00:00');
+
+$t->start('convert Date from Persian(Jalaali) Calendar');
+$date = "1398-12-29";
+//farvardin = 1, ordibeheš = 2, .. esfand=12  
+$dt = dt::create($date)->toGregorianFrom('Persian');
+$t->checkEqual((string)$dt, '2020-03-19 00:00:00');
+
+$t->start('convert Date from Persian(Jalaali) Calendar');
+$date = "1399-01-01";
+//farvardin = 1, ordibeheš = 2, .. esfand=12  
+$dt = dt::create($date)->toGregorianFrom('Persian');
+$t->checkEqual((string)$dt, '2020-03-20 00:00:00');
+
+$t->start('convert Date from Ethiopic Calendar');
+$date = "1965-09-18";  //May 26, 1973
+$dt = dt::create($date)->toGregorianFrom('Ethiopic');
+$t->checkEqual((string)$dt, '1973-05-26 00:00:00');
 
 //
 $t->start('was in berlin in june 2011 summertime');
@@ -1337,6 +1546,7 @@ $result = dt::formatDateInterval('%G:%I', $dateInterval);
 $t->checkEqual($result, "76:06");
 
 $t->start('formatDateInterval -06,125');
+//Error for PHP < 7.1: no support for Microseconds
 $dateInterval = date_create('2000-01-01 00:00:06.125000')
   ->diff(date_create('2000-1-1'));
 $result = dt::formatDateInterval('%R%S,%v', $dateInterval);
