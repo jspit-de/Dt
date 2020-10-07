@@ -1710,9 +1710,15 @@ class dt extends DateTime{
  /*
   * add a relative Time ('1 Hour', '05:03', '00:00:03.5')
   * accept also DateInterval, but DateTime::add is better
+  * accept "-10:44" > v 1.89
   */  
   public function addTime($timeInterval) {
-    $seconds = self::totalRelTime($timeInterval);
+    if(is_string($timeInterval) AND substr($timeInterval,0,1) == "-") {
+      $seconds = -self::totalRelTime(substr($timeInterval,1));
+    }
+    else {
+      $seconds = self::totalRelTime($timeInterval);
+    }
     if($seconds === false) {
       throw new Exception('Parameter for '.__METHOD__.' is not a valid time');
     }
