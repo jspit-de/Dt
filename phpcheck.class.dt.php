@@ -16,7 +16,7 @@ $t->setOutputOnlyErrors(!empty($_GET['error']));
  */
 require '../class/class.dt.php';
 
-//für class.dt.php ab version 1.85
+//für class.dt.php ab version 1.89
 $t->start('check class version');
 $info = $t->getClassVersion("dt");
 $t->check($info, !empty($info) AND $info >= 1.89);
@@ -1050,8 +1050,12 @@ $date = dt::create("2015-03-31 12:00")->addTime('02:15');
 $t->checkEqual((string)$date, "2015-03-31 14:15:00");
 
 $t->start('addTime: 48:15');
-$date = dt::create("2015-02-05 12.00")->addTime('48:15');
+$date = dt::create("2015-02-05 12:00")->addTime('48:15');
 $t->checkEqual((string)$date, "2015-02-07 12:15:00");
+
+$t->start('addTime: -48:30');
+$date = dt::create("2015-02-05 01:00")->addTime('-48:30');
+$t->checkEqual((string)$date, "2015-02-03 00:30:00");
 
 $t->start('subTime: sub 02:30');
 $date = dt::create("2015-03-31 12:00")->subTime('02:30');
