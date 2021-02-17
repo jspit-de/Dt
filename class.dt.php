@@ -2,13 +2,13 @@
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.89                                                           |
-|      Date: 2020-09-27                                                     |
+|   Version: 1.92                                                           |
+|      Date: 2020-02-16                                                     |
 |       PHP: 5.6+                                                           |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014..20, Peter Junk (alias jspit). All Rights Reserved.      |
 ' ------------------------------------------------------------------------- '
- */
+*/
 
 class dt extends DateTime{
   
@@ -267,6 +267,7 @@ class dt extends DateTime{
         $timeEn = self::translateMonth($time);
         if($timeEn !== false) $time = $timeEn;     
       }
+      //Change non ASCII UTF to Space
       $dt = parent::createFromFormat($format, $time , $timeZone);
       if($dt === false) continue;
       if(self::$strictModeCreate) {
@@ -407,7 +408,7 @@ class dt extends DateTime{
     if(is_string($resolution) AND !is_numeric($resolution)){
       $resolution = self::totalRelTime($resolution);
     }
-    return $date->addSeconds(round($time * $resolution))
+    return $date->addSeconds(round($time * $resolution,6))
       ->setTimeZone($timeZone);
   }
 
@@ -1400,7 +1401,7 @@ class dt extends DateTime{
         //replacements with date formats
         $modifier = $this->replaceWildcards($modifier);
         //condition how "{{?D=Wed}}+1 Day"
-        if(preg_match('~^\{\{\?([DdmLYIHis]+)(!?=|<|>)([^}]+)\}\}(.*)~',$modifier,$match)) {
+        if(preg_match('~^\{\{\?([DdmLYIHisW]+)(!?=|<|>)([^}]+)\}\}(.*)~',$modifier,$match)) {
           $dateDetail = parent::format($match[1]);
           $cmpStr = $match[3];
           $newModifier = $match[4];
@@ -1541,14 +1542,15 @@ class dt extends DateTime{
   */  
   public static function formatDateInterval($format, DateInterval $dateInterval) {
     $days = max($dateInterval->days, $dateInterval->d);
+    $weeks = (int)($days/7);
     $totalHours = sprintf('%d',$days * 24 + $dateInterval->h);
     $milliseconds = isset($dateInterval->f) //php 
       ? sprintf('%03d',$dateInterval->f*1000+0.5)
       : 0.0
     ;
     $format = str_replace(
-      array('%G','%v'),
-      array($totalHours,$milliseconds),
+      array('%G','%v','%w'),
+      array($totalHours,$milliseconds,$weeks),
       $format
     );
     return  $dateInterval->format($format);
@@ -2061,11 +2063,11 @@ class dt extends DateTime{
   * @return mixed, false if error
   */
   public function __get($name) {
-    if($name == 'dayOfWeek') {
+    if($name === 'dayOfWeek') {
       $w = $this->format('w');
       return $w ? (int)$w : 7;
     }
-    if($name == 'dayOfYear') {
+    if($name === 'dayOfYear') {
       return $this->format('z')+1;
     }
   
@@ -2085,10 +2087,13 @@ class dt extends DateTime{
       $val = $this->format($identifier[$name]);      
       return is_numeric($val) ? (int)$val : $val;
     }
-    if($name == 'tzName') {
+    if($name === 'weekOfMonth') {
+      return (int)(($this->format('j')-1)/7) +1;
+    }
+    if($name === 'tzName') {
       return $this->getTimezone()->getName();
     }
-    if($name == 'tzType') {
+    if($name === 'tzType') {
       $jsObj = json_decode(json_encode($this));
       return $jsObj->timezone_type;     
     }
@@ -2186,9 +2191,16 @@ class dt extends DateTime{
       //no EN notation  27. Mai 2015 -> 27. May 2015
       $dtTrans = $this->translateMonth($dt);
       if($dtTrans !== false) {
-        $dt = preg_replace('~\b[^0-9]{1,2}( |$)~u'," ",$dtTrans); //remove needless chars
-        $dt = preg_replace('/[[:^print:]]/', ' ', $dt); 
-        $dt = preg_replace('~^(\d{4} )(.+)$~u',"$2 $1",$dt);  //move YYYY to end
+        $dt = $dtTrans;
+        //remove controls and non AsCII
+        $dt = preg_replace('/\p{C}|[^\x1F-\x7F]/u', ' ', $dt);
+        $resTags = 'ago|am|apr|aug|day|dec|eig|ele|feb|fif|fir|for|fou|fri|'
+         .'hou|jan|jul|jun|las|mar|may|mid|min|mon|nex|nin|nov|now|oct|of|'
+         .'pm|pre|sat|sec|sep|sev|six|sun|ten|thi|thu|tod|tue|twe|wed|wee|yea|yes';
+        $re = '~((?:'.$resTags.')\p{L}*|utc|[a-z]+/[a-z]+)|(?:\p{L}+)~iu';
+        $dt = preg_replace($re,'$1',$dt);
+        //$dt = preg_replace('~\b[^0-9]{1,2}( |$)~u'," ",$dt); //remove needless chars
+        //$dt = preg_replace('~^(\d{4} )(.+)$~u',"$2 $1",$dt);  //move YYYY to end
       }
     }
     //reduce microseconds to a maximum of 6
@@ -2329,7 +2341,7 @@ class dt extends DateTime{
     $now = date_create('now',parent::getTimezone());
     $prev = $this;
     return preg_replace_callback(
-      '~\{\{#?([YmdHistuvNwz\-: ]+)\}\}~',
+      '~\{\{#?([YmdHistuvNwWz\-: ]+)\}\}~',
       function($m) use($prev,$now){
         if($m[0][2] == "#") return $now->format($m[1]);
         return $prev->format($m[1]);
