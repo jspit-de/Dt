@@ -1,12 +1,19 @@
 <?php
+use \DateTime as DateTime;
+use \DateTimeZone as DateTimeZone;
+use \Exception as Exception;
+use \IntlDateFormatter as IntlDateFormatter;
+use \IntlCalendar as IntlCalendar;
+use \DateInterval as DateInterval;
+
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
 |   Version: 1.92                                                           |
-|      Date: 2020-02-16                                                     |
+|      Date: 2021-04-18                                                     |
 |       PHP: 5.6+                                                           |
 | ------------------------------------------------------------------------- |
-| Copyright © 2014..20, Peter Junk (alias jspit). All Rights Reserved.      |
+| Copyright © 2014-2021, Peter Junk (alias jspit). All Rights Reserved.     |
 ' ------------------------------------------------------------------------- '
 */
 
@@ -27,7 +34,6 @@ class dt extends DateTime{
   
   protected static $defaultLanguage = self::DE ;
 
-  //https://www.uebersetzungen.in/sprachkuerzel-nach-iso_639-1/  
   //Keys ISO 639-1 Language Codes
   protected static $mon_days = array(
     self::EN_PHP => array("January","February","March","April","May","June","July","August","September","October","November","December",
@@ -149,7 +155,8 @@ class dt extends DateTime{
             }
           }  
         }
-        $dt = vsprintf('%d-%d-%d %d:%d:%d.%06d',$args);
+        $yearFormat = $args[0] >= 0 ? '%04d' : '%05d';
+        $dt = vsprintf($yearFormat.'-%02d-%02d %02d:%02d:%02d.%06d',$args);
       }
     }
     
@@ -198,7 +205,6 @@ class dt extends DateTime{
     if(is_string($timeZone)) {
       $timeZone = new DateTimeZone($timeZone);
     }
-    //date Template
     $dtDateTemplate = self::create($dateTemplate);
     if($dtDateTemplate === false) {
       trigger_error(
@@ -207,6 +213,9 @@ class dt extends DateTime{
       );
       return false;
     }
+    $bc = isset($match['Y']) && $match['Y'] < 0;  //Before Christ
+    if($bc) $match['Y'] = -$match['Y'];
+    
     $formatList = 'Y,m,d,H,i,s,u';
     if(isset($match['O'])) $formatList .= ',O';
     $dateTemplateArr = array_combine(
@@ -238,6 +247,7 @@ class dt extends DateTime{
       return false;
     }
     $dt = self::create($dateTime); 
+    if($bc)$dt->setDate(-$dt->year);
     $dt->lastMatchRegEx = $match;   
     return $dt;
   }
@@ -341,8 +351,8 @@ class dt extends DateTime{
     $regEx = '~^(NONE|FULL|LONG|MEDIUM|SHORT)\+(NONE|FULL|LONG|MEDIUM|SHORT)$~';
     if(preg_match($regEx,$format,$matchIntl)){
       //format contain intl constants
-      $dateType = constant("IntlDateFormatter::".$matchIntl[1]);
-      $timeType = constant("IntlDateFormatter::".$matchIntl[2]);
+      $dateType = constant("\IntlDateFormatter::".$matchIntl[1]);
+      $timeType = constant("\IntlDateFormatter::".$matchIntl[2]);
       $format = NULL;
     }
     $fmt = new IntlDateFormatter($language, $dateType, $timeType, $timeZone, $calType, $format);
@@ -965,7 +975,7 @@ class dt extends DateTime{
   
   
  /* 
-  * cut rest
+  * cut rest (floor number units)
   * $Interval: number Seconds or String x Seconds, x Minutes, x Hours, 
   * x weeks, x month
   * round with $round = true
@@ -2207,6 +2217,17 @@ class dt extends DateTime{
     $dt = preg_replace_callback('~\.\d{7,}~',function($match){
       return ltrim(sprintf('%0.6F',$match[0]),'0');
     },$dt);
+    //negative years
+    if($dt[0] === '-') {
+      $dt = str_replace('/','-',$dt);
+      if(preg_match('~^(-\d{1,4})-(\d{1,2})-(\d{1,2})( |$)~',$dt,$match)){
+        $dt = str_replace(
+          $match[0],
+          sprintf('%05d-%02d-%02d%s',$match[1],$match[2],$match[3],$match[4]),
+          $dt
+        );
+      }
+    }
     return $dt;
   }
   
