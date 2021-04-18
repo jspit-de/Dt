@@ -12,7 +12,7 @@ PHP extension for DateTime API.
 - Supports microseconds
 - Calculate dates for catholic and orthodox Easter and Passover
 - All methods of DateTime can still be used
-- One file, PHP 5.3.8 .. 7.x, no external requirements
+- One file, PHP 5.6 .. 7.x, no external requirements
 
 ### Usage
 
@@ -27,29 +27,42 @@ echo "now is ".(new dt);
 echo "now in New York ".dt::create('Now','America/New_York');
 //now in New York 2017-07-13 11:41:41
 
+//create from integer year, month..
+$dt = dt::create(2019,5,1,12,23,45,12345); //"2019-05-01 12:23:45.012345"
+
+//create Date Christmas Eve current Year, Time 18:00
+$dt = dt::create(NULL,12,24,18);
+
 //use wildcads for create
-$dateObj = dt::create("{{year}}-{{month}}-15 00:00");  //Day 15 this Month time 00:00
-$dateObj = dt::create("{{year}}-{{month}}-15");  //Day 15 this Month current time
+$date = dt::create("{{Y-m}}-15 00:00");  //Day 15 this Month time 00:00
+$date = dt::create("{{easter}}");  //easter date this year 
 
-//Equivalent code with DateTime
-//$dateObj = new DateTime(date("Y-m")."-15 ".(new DateTime)->format("H:i:s.u"));
-
-dt::setDefaultLanguage('de');  //German
 //German Input
+dt::setDefaultLanguage('de');  //German
 $Date =  dt::create("1.Mai 17");  //2017-05-01 00:00:00
 
 dt::setDefaultLanguage('ru');
 $date = dt::create("1 октября 1990");
 echo $date->format("l, j F Y"); //﻿Monday, 1 October 1990
 
-//create dt from float timestamp : 2017-07-31 13:47:02.250000
-echo dt::create(1501501622.25)->toStringWithMicro();
-
 //create dt from exotic formats with Regular Expressions
 $string = "Y2015M5D17";
 $regEx = '~^Y(?<Y>\d{4})M(?<m>\d{1,2})D(?<d>\d{1,2})$~'; 
 $date = dt::createFromRegExFormat($regEx,$string);
 echo $date; //2015-05-17 00:00:00
+
+//create from timestamps: float timestamp 
+echo dt::create(1501501622.25)->toStringWithMicro();
+//2017-07-31 13:47:02.250000
+
+//create From LDAP Timestamp
+$timeStamp = 130981536000000000;
+$basisDate = '1601-1-1';
+$resolution = 1.E-7; // 100ns 
+$date = dt::createFromSystemTime($timeStamp,$basisDate,$resolution,"UTC"); 
+//2016-01-25 00:00:00 
+
+
 ```
 #### Formatting for output
 
@@ -60,8 +73,7 @@ $date = dt::create("2016-12-13 08:24:38");
 echo $date;  //2016-12-13 08:24:38
 
 $dateOfBirth = dt::create('16.3.1975');
-echo 'Ich bin an einem '.$dateOfBirth->formatL('l')
-  .' im '.$dateOfBirth->formatL('F').' geboren.';
+echo 'Ich bin an einem '.$dateOfBirth->formatL('l \i\m F').' geboren.';
 //Ich bin an einem Sonntag im März geboren.
 
 echo dt::create('2016-01-16')->formatL('l, d F Y','fr');
@@ -242,5 +254,5 @@ http://jspit.de/check/phpcheck.class.dt.php
 
 ### Requirements
 
-- PHP 5.3.8+
+- PHP 5.6+
 - IntlDateFormatter class for full language support
