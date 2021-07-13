@@ -1,5 +1,11 @@
 # DateTime Extension dt
 
+## Version 1.93 (2021-07-07)
+* Redesign property weekOfMonth
+
+## Version 1.91 (2020-12-20)
+* Add week format% w to formatDateInterval and diffFormat
+
 ## Version 1.89 (2020-09-27)
 * Added method setSunrise
 * Added method setSunset
