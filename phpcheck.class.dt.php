@@ -1,5 +1,6 @@
 <?php
-//last modify: 2020-09-26 
+
+//last modify: 2021-03-21
 error_reporting(-1);
 ini_set('display_errors', 1);
 header('Content-Type: text/html; charset=UTF-8');
@@ -16,10 +17,17 @@ $t->setOutputOnlyErrors(!empty($_GET['error']));
  */
 require '../class/class.dt.php';
 
-//für class.dt.php ab version 1.89
+//für class.dt.php ab version 1.92
 $t->start('check class version');
 $info = $t->getClassVersion("dt");
-$t->check($info, !empty($info) AND $info >= 1.89);
+$t->check($info, !empty($info) AND $info >= 1.92);
+
+$t->start('Check if extension IntlDateFormatter exists');
+$msg = extension_loaded("Intl") 
+  ? 'ok' 
+  : 'missing Intl extension'
+;
+$t->checkEqual($msg,'ok');
 
 $t->start('set default Timezone and Language');
 dt::default_timezone_set('Europe/Berlin');
@@ -66,6 +74,14 @@ $t->start('Create a Date with Microseconds');
 $date = dt::create('1981-04-03 06:09:25.160000');
 $t->checkEqual($date->toStringWithMicro(), '1981-04-03 06:09:25.160000');
 
+$t->start('create Date B.C.(before christ)');
+$date = dt::create('-400-05-06');
+$t->checkEqual((string)$date, '-0400-05-06 00:00:00');
+
+$t->start('create Date B.C.(before christ)');
+$date = dt::create('-0036/05/06');
+$t->checkEqual((string)$date, '-0036-05-06 00:00:00');
+
 $t->start('Create a fix Date with english month');
 $date = dt::create('March 4, 2016');
 $t->checkEqual((string)$date, '2016-03-04 00:00:00');
@@ -73,6 +89,10 @@ $t->checkEqual((string)$date, '2016-03-04 00:00:00');
 $t->start('Create a fix Date with german month');
 $date = dt::create('4.März 2016');
 $t->checkEqual((string)$date, '2016-03-04 00:00:00');
+
+$t->start('Create Date from year and Week-Number');
+$date = dt::create('2015W50');
+$t->checkEqual((string)$date, '2015-12-07 00:00:00');
 
 $t->start('Create a Date easter monday 2016 from chain of strings');
 $date = dt::create('2016-1-1|{{easter}}|+1 Day');
@@ -124,6 +144,10 @@ $date = dt::create(35573107125.25);
 $expected = '3097-04-07 19:38:45.250000';
 $t->checkEqual($date->formatL('Y-m-d H:i:s.u'), $expected);
 
+$t->start('Create Date from a big negative Float Timestamp');
+$date = dt::create(-63292409608.0);
+$t->checkEqual((string)$date,'-0036-05-06 00:00:00');
+
 $t->start('Create Date from a Javascript Milliseconds Timestamp');
 $timeStamp = 1393161787500;
 $date = dt::create($timeStamp/1000);
@@ -148,6 +172,10 @@ $t->checkEqual($dt->format('Y-m-d H:i:s e'),"2019-05-01 00:00:00 Europe/Moscow")
 $t->start('Create from int arguments H:i curr.Time + timezone UTC');
 $dt = dt::create(2019,5,1,null,null,"UTC");
 $t->checkEqual($dt->format('H:i'),gmdate('H:i'));
+
+$t->start('Create from int arguments with negative year');
+$dt = dt::create(-432,5,1,"UTC");
+$t->checkEqual($dt->format('Y-m-d e'),'-0432-05-01 UTC');
 
 //create with wildcards
 $t->start('Create Now with Wildcards');
@@ -185,6 +213,25 @@ $t->start('2 Month after 2017-06-15 13:30, Day 5 of this Month, same Time');
 $date = dt::create("2017-06-15 13:30|+2 month|{{Y}}-{{m}}-05");
 $t->checkEqual((string)$date, "2017-08-05 13:30:00");
 
+$t->start('crate dt with language en');
+dt::setDefaultLanguage('en');
+$dt = dt::create('2017-03-03T09:06:41.187');
+$t->checkEqual($dt->toStringWithMicro(), "2017-03-03 09:06:41.187000");
+
+$t->start('Date with relative Format');
+$dt = dt::create('first Sunday of Jun 2018 23:16:15.4');
+$t->checkEqual((string)$dt, "2018-06-03 23:16:15");
+
+$t->start('Date with relative Format language de');
+dt::setDefaultLanguage('de');
+$dt = dt::create('first Sunday of Jun 2018 23:16:15.4');
+$t->checkEqual((string)$dt, "2018-06-03 23:16:15");
+
+$t->start('Date with pm time');
+$dt = dt::create('Nov 7 2008 1:45 pm');
+$t->checkEqual((string)$dt, "2008-11-07 13:45:00");
+
+
 //create Dt from format
 $t->start('crate dt from format');
 $input     = "Apr 19 '15 at 13:56";
@@ -199,6 +246,11 @@ $format = 'Y-m-d\Th:i:s:u \G\M\TO';
 $dt = dt::createDtFromFormat($format, $input);
 $result = $dt ? $dt->format($format) : $dt;
 $t->checkEqual($result, "2020-01-07T11:55:34:438000 GMT+0600");
+
+$t->start('create from day of year starting with 1 and year (DOY)');
+$input = "76 2021";
+$dt = dt::createDtFromFormat("!z Y",$input)->modify("-1 Day");
+$t->checkEqual((string)$dt, "2021-03-17 00:00:00");
 
 $t->start('crate dt from format with array of formats');
 $input = '7/1/2018';
@@ -226,12 +278,20 @@ $dt = dt::createDtFromFormat("!d M Y", $input);
 $result = $dt ? (string)$dt : $dt;
 $t->checkEqual($result, "2020-08-07 00:00:00");
 
+$t->start('Create from the Japanese');
+//UTF-8 multibyte characters need * instead of ?
+$input ='2008年11月13日';
+$dt = dt::createDtFromFormat('!Y*m*d*',$input);
+$t->checkEqual((string)$dt, "2008-11-13 00:00:00");
 
 //reset DefaultLanguage
 dt::setDefaultLanguage('de');
 
+if(extension_loaded("Intl")) {
+
 $t->start('createFromIntlFormat');
 $input = "21 Août 2020";
+//http://userguide.icu-project.org/formatparse/datetime
 $dt = dt::createFromIntlFormat('d MMMM yyyy',$input,'Europe/Paris','fr'); 
 $result = $dt ? (string)$dt : $dt;
 $t->checkEqual($result, "2020-08-21 00:00:00");
@@ -241,6 +301,15 @@ $input = "17 มกราคม 2507";  //January 17, 1964
 $dt = dt::createFromIntlFormat('d MMMM yyyy',$input,"Asia/Bangkok",'th@calendar=buddhist'); 
 $result = $dt ? (string)$dt : $dt;
 $t->checkEqual($result, "1964-01-17 00:00:00");
+
+$t->start('createFromIntlFormat ja_JP@calendar=japanese');
+$input = "平成30年8月1日";  //1 August 2018
+$dt = dt::createFromIntlFormat('LONG+NONE',$input,"Asia/Tokyo",'ja_JP@calendar=japanese'); 
+$result = $dt ? (string)$dt : $dt;
+$t->checkEqual($result, "2018-08-01 00:00:00");
+
+} //IntlDateFormatter
+
 
 $t->start('crate from Julian Date Number');
 $date = dt::createFromJD(2458294.65168,"UTC");
@@ -271,6 +340,13 @@ $timeStamp = 130981536000000000;
 $date = dt::createFromSystemTime($timeStamp,'1601-1-1',1.E-7,"UTC");
 $expected = "2016-01-25 00:00:00";
 $t->checkEqual((string)$date, $expected);
+
+$t->start('create dt from a LDAP Timestamp with Microseconds');
+$timeStamp ="132497313049180481";
+$date = dt::createFromSystemTime($timeStamp,'1601-1-1',1.E-7,"UTC");
+$expected = dt::create('2020-11-13 08:55:04.9180481','UTC');
+$ok = abs($date->diffTotal($expected,'Sec')) < 0.00001;  //tolerance 10 µs
+$t->check($date->toStringWithMicro(), $ok);
 
 $t->start('create dt from Mac Timestamp: seconds since Jan 1 1904');
 $timeStamp = 3662360215;
@@ -374,7 +450,7 @@ $t->start('format with English short Weekday');
 $strDate = dt::create('2014-12-20')->formatL('D, d.m.Y','en');
 $t->checkEqual($strDate,'Sat, 20.12.2014');
 
-if(function_exists('datefmt_create')){ //with IntlDateFormatter
+if(extension_loaded("Intl")){ //with IntlDateFormatter
   
 $t->start('IntlDateFormatter exists: language "fr"');  
 $strDate = dt::create('14.1.2015')->formatL('l, d F Y','fr');  
@@ -411,6 +487,9 @@ $icuFormat = "yyyy-MM-dd"; //must use if calendar not gregorian
 $lang = "ir_IR@calendar=persian";
 $date = dt::create("2018-2-19")->formatIntl($icuFormat,$lang); 
 $t->checkEqual($date, "1396-11-30");
+/* 
+ * input other language
+ */
 
 $t->start('Input in Russian');
 // date from strings given in various languages
@@ -422,6 +501,16 @@ $t->start('Input in danish');
 dt::setDefaultLanguage('DA');
 $date = dt::create("3. maj 2018 06:39");
 $t->check($date, $date == dt::create("2018-05-03 06:39:00"));
+
+$t->start('Input in Spanish');  
+dt::setDefaultLanguage('es');
+$date = dt::create('2 de enero de 1992');
+$t->check($date, $date == dt::create("1992-01-02 00:00:00"));
+
+$t->start('Input in Greek');  
+dt::setDefaultLanguage('el');
+$date = dt::create('13 Δεκεμβρίου 2007 12:45 μ.μ.');
+$t->check($date, $date == dt::create("2007-12-13 12:45:00"));
 
 $t->start('createDtFromFormat with with Finnish month name');
 dt::setDefaultLanguage('fi');
@@ -679,6 +768,23 @@ $t->start('get quarter number of 2015-4-1');
 $result = dt::create('2015-4-1')->getQuarter();
 $t->checkEqual($result, 2);
 
+$t->start('get DateTime-Object');
+$dateTime = dt::create('2014-09-23','America/New_York')
+  ->getDateTime()
+;
+$ok = $dateTime instanceof DateTime 
+  && !($dateTime instanceof dt)
+  && $dateTime->format('Y-m-d e') === '2014-09-23 America/New_York'
+;
+$t->check($dateTime, $ok);
+
+$t->start('get unknown property : false');
+/*
+ *  Properties
+ */
+$result = dt::create('2017-11-18')->unknown;
+$t->checkEqual($result, false);
+
 $t->start('get year as integer');
 $result = dt::create('2015-4-1 06:15:46')->year;
 $t->checkEqual($result, 2015);
@@ -726,10 +832,57 @@ $t->start('get dayOfWeek ISO 8601 Sunday: 7');
 $result = dt::create('next Sunday')->dayOfWeek;
 $t->checkEqual($result, 7);
 
+$t->start('get daysInMonth');
+//Nov has 30 days
+$result = dt::create('2017-11-18')->daysInMonth;
+$t->checkEqual($result, 30);
+
 $t->start('get dayOfYear from 2017-11-18 as integer');
 //Day of the year starts with 1 on 1.1.
 $result = dt::create('2017-11-18')->dayOfYear;
 $t->checkEqual($result, 322);
+
+$t->start('get weekOfMonth from 2017-11-18 as integer');
+$result = dt::create('2017-11-18')->weekOfMonth;
+$t->checkEqual($result, 3);
+
+$t->start('get weekOfMonth from Sun 2016-10-02 as integer');
+$result = dt::create('2016-10-02')->weekOfMonth;
+$t->checkEqual($result, 1);
+
+$t->start('get weekOfMonth from Mon 2016-10-03 as integer');
+$result = dt::create('2016-10-03')->weekOfMonth;
+$t->checkEqual($result, 2);
+
+$t->start('get weekOfMonth from 2016-10-31 as integer');
+$result = dt::create('2016-10-31')->weekOfMonth;
+$t->checkEqual($result, 6);
+
+$t->start('get weekOfMonth from Mon 2019-12-30 as integer');
+$result = dt::create('2019-12-30')->weekOfMonth;
+$t->checkEqual($result, 6);
+
+$t->start('application example for weekOfMonth');
+$strDate= '18.3.2017';
+$dt = dt::create($strDate);
+$str = $strDate.' ist der '
+  .$dt->weekOfMonth
+  .$dt->formatL('\. l \i\m F Y','de') //names in german
+;
+$t->checkContains($str, '3.,Sam');
+
+$t->start('create a relative Date-String with weekOfMonth');
+$no = [1 => 'first','second','third','fourth','fifth'];
+$strDate = '18.3.2017';
+$dt = dt::create($strDate);
+$str = $no[$dt->weekOfMonth].$dt->format(' l \o\f F Y'); 
+$t->check($str, date_create($str) == date_create($strDate));
+
+
+$t->start('get weekOfYear from 2017-11-18 as integer');
+// ISO-8601 week number of year, weeks starting on Monday
+$result = dt::create('2017-11-18')->weekOfYear;
+$t->checkEqual($result, 46);
 
 $t->start('get timezone name');
 $result = dt::create('now','America/New_York')->tzName;
@@ -738,6 +891,8 @@ $t->checkEqual($result, 'America/New_York');
 $t->start('get timezone type');
 $result = dt::create('now','America/New_York')->tzType;
 $t->checkEqual($result, 3);
+
+//end properties
 
 $t->start('get Date as JD Julian Date Number');
 $result = dt::create('2018-06-25 03:38:25 UTC')->toJD();
@@ -749,7 +904,7 @@ $expect = (float)gregoriantojd ( 11 , 25 , 1695 );
 $t->checkEqual($result,$expect);
 
 $t->start('get JD from date in future');
-$result = dt::create('2081-02-23 13:00')->toJD();
+$result = dt::create('2081-02-23 12:00','UTC')->toJD();
 $expect = (float)gregoriantojd ( 2 , 23 , 2081 );
 $t->checkEqual($result,$expect);
 
@@ -762,10 +917,6 @@ $t->start('create dt from jdn Europe/Berlin');
 $result = dt::createFromJD(2458294.6516782);
 $expect = '2018-06-25 05:38:25';
 $t->checkEqual((string)$result,$expect);
-
-$t->start('get unknown property : false');
-$result = dt::create('2017-11-18')->unknown;
-$t->checkEqual($result, false);
 
 $t->start('average of 2 dates');
 $result = dt::create('2015-4-1')->average('2015-4-2');
@@ -977,6 +1128,10 @@ $t->start('diffFormat: min:sec.millisec');
 //Error for PHP < 7.0
 $strDuration = dt::create("08:00:01.500000")->diffFormat("08:12:10.750000","%I:%S.%v");
 $t->checkEqual($strDuration, "12:09.250");
+
+$t->start('diffFormat Weeks %w');
+$weeks = $dt::create('2018-06-01')->diffFormat('2018-06-16','%w');
+$t->checkEqual($weeks, "2");
 
 //diffHuman
 $t->start('diffHuman: de');
@@ -1233,6 +1388,8 @@ $passoverDate2019 = dt::create("2019-1-1")->setPassoverDate();
 $t->checkEqual((string)$passoverDate2019, '2019-04-20 00:00:00');
 
 //calender convert
+if(extension_loaded("Intl")) {
+
 $t->start('convert Date from Indian Calendar');
 $indianDate = "1942-07-03";
 $dt = dt::create($indianDate)->toGregorianFrom('Indian');
@@ -1254,6 +1411,8 @@ $t->start('convert Date from Ethiopic Calendar');
 $date = "1965-09-18";  //May 26, 1973
 $dt = dt::create($date)->toGregorianFrom('Ethiopic');
 $t->checkEqual((string)$dt, '1973-05-26 00:00:00');
+
+} //IntlDateFormatter
 
 //
 $t->start('was in berlin in june 2011 summertime');
@@ -1400,13 +1559,21 @@ $t->start('chain: 4. advent 2017');
 $date = dt::create('2017-1-1')->chain('12/25|last Sunday');
 $t->checkEqual((string)$date, '2017-12-24 00:00:00');
 
-$t->start('chain: first Day of current month');
+$t->start('chain: first Day of current month 00:00');
 $date = dt::create()->chain('first Day of this Month | 00:00');
 $t->checkEqual((string)$date, date('Y-m-01 00:00:00'));
 
 $t->start('chain: Spring Bank Holiday 2016 (United Kingdom)');
 $date = dt::create('2016-1-1')->chain('Last monday of May {{year}}');
 $t->checkEqual((string)$date, '2016-05-30 00:00:00');
+
+$t->start('chain with Year and Week, time is preserved');
+$date = dt::create('2010-06-09 14:45')->chain('2015W50');
+$t->checkEqual((string)$date, '2015-12-07 14:45:00');
+
+$t->start('chain with Year and Week, time is set to 00:00');
+$date = dt::create('2010-06-09 14:45')->chain('2015W50|00:00');
+$t->checkEqual((string)$date, '2015-12-07 00:00:00');
 
 $t->start('chain with userparameter');
 $para = array('{{theYear}}' => 2018);
@@ -1460,9 +1627,15 @@ $t->checkEqual((string)$date, '2018-09-24 12:23:45');
 $t->start('If the date is in the past, it is set to the current time +1 hour');
 $date = dt::create('2000-01-01'); //is in the past
 $date->chain('{{?YmdHis<NOW}} {{#Y-m-d H:i}} +1 Hour');
-
 $expected = date_create('now')->format('Y-m-d H:i');
 $expected = date_create($expected)->modify('+ 1 Hour')->format('Y-m-d H:i:s');
+$t->checkEqual((string)$date, $expected);
+
+$t->start('exclude week 18-2018 from 30.Apr-6.May 2018');
+$date = dt::create('2018-05-02')
+  ->chain('{{?YW=201818}}next Monday')
+;
+$expected = "2018-05-07 00:00:00"; 
 $t->checkEqual((string)$date, $expected);
 
 $t->start('chain with cron-tab-string');
