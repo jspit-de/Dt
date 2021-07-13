@@ -9,8 +9,8 @@ use \DateInterval as DateInterval;
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.92                                                           |
-|      Date: 2021-04-18                                                     |
+|   Version: 1.93                                                           |
+|      Date: 2021-07-07                                                     |
 |       PHP: 5.6+                                                           |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014-2021, Peter Junk (alias jspit). All Rights Reserved.     |
@@ -64,7 +64,7 @@ class dt extends DateTime{
   * $dt: string or int/float timestamp or dt-object or DateTime-Object 
   * $timeZone. string or DateTimeZone.Object
   */ 
-  public function __construct($dt = null, $timeZone = null){
+  final public function __construct($dt = null, $timeZone = null){
     //TimeZone
     if(is_string($timeZone)) {
       $timeZone = new DateTimeZone($timeZone);
@@ -192,6 +192,7 @@ class dt extends DateTime{
       $regExFormats = [$regExFormats];
     }
     $ok = false;
+    $match = [];
     foreach($regExFormats as $regExFormat){
       if($ok = preg_match($regExFormat,(string)$dateStr,$match)) break;
     }
@@ -270,7 +271,7 @@ class dt extends DateTime{
     if(is_string($formats)) {
       $formats = [$formats];
     }
-    $ok = false;
+    $ok = $dt = false;
     foreach($formats as $format){
       //translate monthname if format contain F or M
       if(strpbrk($format,"FM") !== false) {
@@ -381,7 +382,6 @@ class dt extends DateTime{
       ->round()
       ->setTimeZone($timeZone)
     ;
-
   }
 
  /*
@@ -431,13 +431,13 @@ class dt extends DateTime{
     if(!extension_loaded('intl')){
       throw new Exception(__METHOD__.' need the Intl Extension'); 
     }  
-    $tz = $this->tzName;
+    $tz = $this->getTimezone()->getName();
     $cal = IntlCalendar::createInstance($tz, "en_US@calendar=".$calendar);
     if(strtolower($cal->getType()) == 'gregorian') {
       throw new Exception("invalid Parameter '".$calendar."' for ".__METHOD__);  
     }
     $dateArr = explode(" ",$this->format('Y n j H i s'));
-    $cal->set((int)$dateArr[0],$dateArr[1]-1,(int)$dateArr[2],(int)$dateArr[3],(int)$dateArr[4],(int)$dateArr[5]);
+    $cal->set((int)$dateArr[0],(int)$dateArr[1]-1,(int)$dateArr[2],(int)$dateArr[3],(int)$dateArr[4],(int)$dateArr[5]);
     $formatter = IntlDateFormatter::create("en_US",
       IntlDateFormatter::SHORT, 
       IntlDateFormatter::MEDIUM,
@@ -916,7 +916,7 @@ class dt extends DateTime{
   * return integer Seconds since midnight 
   */
   public function getDaySeconds() {
-    $secondsDay = (parent::format('H') * 60 + parent::format('i'))*60 + parent::format('s');
+    $secondsDay = ((int)parent::format('H') * 60 + (int)parent::format('i')) * 60 + (int)parent::format('s');
     return $secondsDay;
   }
 
@@ -924,14 +924,14 @@ class dt extends DateTime{
   * return integer Minutes since midnight 
   */
   public function getDayMinutes() {
-    return parent::format('H') * 60 + parent::format('i');
+    return (int)parent::format('H') * 60 + (int)parent::format('i');
   }
   
  /*
   * return numeric representation of the quarter (1..4)
   */
   public function getQuarter() {
-    $quarter = (parent::format('n')+2)/3;
+    $quarter = ((int)parent::format('n')+2)/3;
     return (int)$quarter;
   }
 
@@ -965,12 +965,16 @@ class dt extends DateTime{
 
  /*
   * return float JD (Julian Date Number)
-  * Date > 0001-01-01
   */
   public function toJD() {
-    return self::create('12:00 UTC')
-      ->setDate(1,1,1)
-      ->diffTotal($this,"Days") + 1721426;
+    list($y,$m,$d,$h,$i,$s) = explode(' ', parent::format('Y m d H i s'));
+    if($m <= 2){
+      $y -= 1;
+      $m += 12;
+    }
+    $d += $h/24 + $i/1440 + $s/86400;
+    $b = 2 - floor($y/100) + floor($y/400);
+    return floor(365.25*($y+4716)) + floor(30.6001*($m+1)) + $d + $b -1524.5;
   }
   
   
@@ -1143,8 +1147,7 @@ class dt extends DateTime{
       return parent::diff($date, $absolute);
     }
     $dateTime = self::create($date);
-    $interval = parent::diff($dateTime, $absolute);
-    return class_exists('DtInterval') ? DtInterval::create($interval) : $interval;
+    return parent::diff($dateTime, $absolute);
   }
 
  /*
@@ -1253,6 +1256,8 @@ class dt extends DateTime{
     
     $diff = $this->diffTotal($date);
     if($diff === false) return false; //Warning from diffTotal
+    $div = 1;
+    $unit = '?';
     foreach($units as $unit => $div){
       if(abs($diff) < $div * 2) break;
       $diff /= $div;
@@ -1582,7 +1587,7 @@ class dt extends DateTime{
   
   
  /*
-  * get dt as DateTime
+  * get dt as new DateTime (copy)
   */
   public function getDateTime() {
     return date_create(parent::format('Y-m-d H:i:s.u'),parent::getTimezone());
@@ -2098,7 +2103,11 @@ class dt extends DateTime{
       return is_numeric($val) ? (int)$val : $val;
     }
     if($name === 'weekOfMonth') {
-      return (int)(($this->format('j')-1)/7) +1;
+      //get integer week number of the current month, 
+      //weeks start on Monday and counting always starts with 1
+      $dayFirstMonday = date_create('first monday of '.$this->format('F Y'))->format('j');
+      $startedWeek = $dayFirstMonday > 1 ? 1 : 0;
+      return (int)(($this->format('j') - $dayFirstMonday +7)/7) + $startedWeek;
     }
     if($name === 'tzName') {
       return $this->getTimezone()->getName();
@@ -2217,17 +2226,12 @@ class dt extends DateTime{
     $dt = preg_replace_callback('~\.\d{7,}~',function($match){
       return ltrim(sprintf('%0.6F',$match[0]),'0');
     },$dt);
-    //negative years
-    if($dt[0] === '-') {
-      $dt = str_replace('/','-',$dt);
-      if(preg_match('~^(-\d{1,4})-(\d{1,2})-(\d{1,2})( |$)~',$dt,$match)){
-        $dt = str_replace(
-          $match[0],
-          sprintf('%05d-%02d-%02d%s',$match[1],$match[2],$match[3],$match[4]),
-          $dt
-        );
-      }
-    }
+    //negative years up to -9999
+    $dt = preg_replace_callback(
+      '~^(-\d{1,4})([\-/])(\d{1,2})\2(\d{1,2})( |$)~',
+      function($m){return sprintf('%05d-%02d-%02d%s',$m[1],$m[3],$m[4],$m[5]);},
+      $dt
+    );
     return $dt;
   }
   
