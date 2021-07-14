@@ -1,6 +1,6 @@
 <?php
 
-//last modify: 2021-03-21
+//last modify: 2021-07-14
 error_reporting(-1);
 ini_set('display_errors', 1);
 header('Content-Type: text/html; charset=UTF-8');
@@ -17,10 +17,10 @@ $t->setOutputOnlyErrors(!empty($_GET['error']));
  */
 require '../class/class.dt.php';
 
-//für class.dt.php ab version 1.92
+//für class.dt.php ab version 1.93
 $t->start('check class version');
 $info = $t->getClassVersion("dt");
-$t->check($info, !empty($info) AND $info >= 1.92);
+$t->check($info, !empty($info) AND $info >= 1.93);
 
 $t->start('Check if extension IntlDateFormatter exists');
 $msg = extension_loaded("Intl") 
@@ -414,19 +414,22 @@ $regEx = '~(?<d>\d{1,2})\.(?<m>\d{1,2}) ?(?<H>\d{1,2}) Uhr (?<i>\d{1,2})~';
 $date = dt::createFromRegExFormat($regEx,$str);
 $t->checkEqual((string)$date,date('Y').'-05-02 19:30:00');
 
+$t->start('Create Date with regular Expressions and negative Year');
+$str = '-45/8';
+$regEx = '~^(?<Y>-?[\d]{1,4})/(?<m>\d{1,2})$~';
+$dateTemplate = "0000-01-01";
+$date = dt::createFromRegExFormat($regEx,$str,null,$dateTemplate);
+$t->checkEqual((string)$date,'-0045-08-01 00:00:00');
+
 $t->start('get matches from last RegEx ');
 $matches = $date->getMatchLastCreateRegEx(); 
-$expected = array (
-  0 => "2.5 19 Uhr 30",
-  'd' => "2",
-  1 => "2",
-  'm' => "5",
-  2 => "5",
-  'H' => "19",
-  3 => "19",
-  'i' => "30",
-  4 => "30",
-);
+$expected = [
+  0 => "-45/8",
+  'Y' => "-45",
+  1 => "-45",
+  'm' => "8",
+  2 => "8",
+];
 $t->checkEqual($matches,$expected);
 
 $t->start('Create date using a array of regular expressions');

@@ -5,6 +5,7 @@
 
 ## Version 1.91 (2020-12-20)
 * Add week format% w to formatDateInterval and diffFormat
+* Accepts date expressions with negative years
 
 ## Version 1.89 (2020-09-27)
 * Added method setSunrise

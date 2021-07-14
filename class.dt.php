@@ -10,7 +10,7 @@ use \DateInterval as DateInterval;
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
 |   Version: 1.93                                                           |
-|      Date: 2021-07-07                                                     |
+|      Date: 2021-07-14                                                     |
 |       PHP: 5.6+                                                           |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014-2021, Peter Junk (alias jspit). All Rights Reserved.     |
@@ -248,7 +248,10 @@ class dt extends DateTime{
       return false;
     }
     $dt = self::create($dateTime); 
-    if($bc)$dt->setDate(-$dt->year);
+    if($bc){
+      $dt->setDate(-$dt->year);
+      $match['Y'] = (string)-$match['Y'];
+    }
     $dt->lastMatchRegEx = $match;   
     return $dt;
   }
