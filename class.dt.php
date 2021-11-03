@@ -9,8 +9,8 @@ use \DateInterval as DateInterval;
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.93                                                           |
-|      Date: 2021-07-14                                                     |
+|   Version: 1.95                                                           |
+|      Date: 2021-10-11                                                     |
 |       PHP: 5.6+                                                           |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014-2021, Peter Junk (alias jspit). All Rights Reserved.     |
@@ -857,20 +857,11 @@ class dt extends DateTime{
   }
   
  /*
-  * toCET: set Timezone for CET or UTC (Fallback)
+  * toCET: set Timezone for CET 
   * return Standard-Time (Wintertime)
   */
   public function toCET(){
-     try{
-      $tz = new DateTimeZone('+01:00');
-      $utc = false;
-    }
-    catch(exception $e){
-      $tz = new DateTimeZone('UTC');
-      $utc = true;
-    }
-    $this->setTimezone($tz);
-    if($utc) $this->modify("+1 hour");
+    $this->setTimezone(new DateTimeZone('CET'));
     return $this;
   }
   
@@ -880,7 +871,51 @@ class dt extends DateTime{
   public function isWeekend(){
     return parent::format('N') > 5;
   }
-  
+
+ /*
+  * return true if the day is from monday to friday 
+  */  
+  public function isWeekday(){
+    return !$this->isWeekend();
+  }
+
+ /*
+  * is('datestring')
+  * @param string $partialDateString
+  * @return bool
+  */
+  public function is($partialDateString){
+    $regExFmt = [
+      '/^(?<int>\d{3,4})$/' => 'Y',
+      '/^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)/i' => 'l',
+      '/^weekend|weekday|summertime|LeapYear|past|future$/i' => 'function',
+      '/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]{0,7}$/i' => 'F',
+      '/^\d{3,4}-\d\d-\d\d$/' => 'Y-m-d',
+      '/^\d{3,4}-\d\d$/' => 'Y-m',
+      '/^\d\d-\d\d$/' => 'm-d',
+      '/^(?<int>\d{1,2})h$/i' => 'H',
+      '/^\d\d:\d\d$/' => 'H:i',
+      '/^\d\d:\d\d:\d\d$/' => 'H:i:s'
+    ];
+
+    foreach($regExFmt as $regEx => $fmt){
+      if(preg_match($regEx, (string)$partialDateString, $match)){
+        if($fmt === 'function'){
+          $fct = 'is'.$partialDateString;
+          return $this->$fct();
+        }
+        $strDate = parent::format($fmt);
+        if(isset($match['int'])) {
+          return (int)$match['int'] === (int) $strDate;
+        }
+        return stripos($strDate,$partialDateString) === 0;
+      }
+    }
+    // check if rel date how today, yesterday, tomorrow
+    $refDate = date_create($partialDateString);
+    return is_object($refDate) AND $refDate->format("Y-m-d") === parent::format("Y-m-d");
+  }
+
  /*
   * return true if year is a leap year
   */  
@@ -1174,6 +1209,7 @@ class dt extends DateTime{
       $unitList = array(
         'y' => 'Years', 'm' => 'Month', 'w' => 'Weeks','d' => 'Days', 
         'h' => 'Hours', 'i' => 'Minutes', 's' => 'Seconds',
+        'ms' => 'Milliseconds', 'mc' => 'MicroSeconds'
       );
       $match = preg_grep('/^'.preg_quote($unitP,'/').'/i',$unitList);
       
@@ -1220,6 +1256,8 @@ class dt extends DateTime{
       $total = $diff->invert ? -$total : $total;
       //$total += $microSec; 
       if($unit == $unitList['s']) return $total;
+      if($unit == $unitList['ms']) return $total * 1000;
+      if($unit == $unitList['mc']) return $total * 1E6;
       $total /= 60;
       if($unit == $unitList['i']) return $total;
       $total /= 60;
@@ -1554,7 +1592,7 @@ class dt extends DateTime{
 
  /*
   * formats a DateInterval
-  * @param string $format: DateInterval::formats + %G, %v
+  * @param string $format: DateInterval::formats + %G, %v, %w (full weeks!)
   * @param DateInterval $dateInterval
   * @return string 
   */  
@@ -1954,7 +1992,6 @@ class dt extends DateTime{
  /*
   * @return: DateTime of Clockchange to Summertime ($toWintertime = false) or to Wintertime,
   *   null if no Clockchange or false if error
-  * @params: $year as YYYY, max. 2037
   * @params: $toWintertime false or true 
   * @params: $timeZone string or timezoneobject
   */
@@ -2329,7 +2366,8 @@ class dt extends DateTime{
       $isdst = !$toWintertime ;
       return substr($value['time'],0,4) == $year && $value['isdst'] != $toWintertime;
     };
-    $sel = array_filter($timeZone->getTransitions(-2051226000),$filter);
+    $tsFrom = strtotime(($year-1).'-01-01');
+    $sel = array_filter($timeZone->getTransitions($tsFrom,$tsFrom + 94000000),$filter);
     if(empty($sel))return null;
     $sel = reset($sel);
     return $sel['time'];
