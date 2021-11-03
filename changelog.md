@@ -1,5 +1,10 @@
 # DateTime Extension dt
 
+## Version 1.94 (2021-09-23)
+* Added method isWeekday
+* Added method is
+* diffTotal accepts units of milliseconds and microseconds
+
 ## Version 1.93 (2021-07-07)
 * Redesign property weekOfMonth
 

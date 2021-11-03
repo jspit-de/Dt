@@ -217,6 +217,23 @@ $cronStr = "20,30 1 * * 1-5";  //mo-fr 01:20, 1:30
 $dateTime = dt::create('2017-7-27 01:30:00'); 
 $cronStart = $dateTime->isCron($cronStr);  //true 
 
+//is
+$dt = dt::create('Jun 7 2021 13:46:01');  
+//Monday, 2021-06-07 13:46:01
+
+$isJun = $dt->is('June');  //bool(true)
+$isMon = $dt->is('Monday');  //bool(true)
+$isWeekDay = $dt->is('weekday');  //bool(true)
+$isyear2021 = $dt->is('2021');  //bool(true)
+$is13h46 = $dt->is('13:46');  //bool(true)
+$isJun2021 = $dt->is('2021-06');  //bool(true)
+$isPast = $dt->is('past');  //bool(true)
+
+$isToday = $dt->is('today');  //bool(false)
+$isFuture = $dt->is('future');  //bool(false)
+$isSunday = $dt->is('sun');  //bool(false)
+
+
 ```
 
 #### Example Shophours
