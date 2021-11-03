@@ -168,9 +168,6 @@ $seconds = dt::create('today')->diffTotal(microtime(true),"Second");
 //Minutes since midnight from a date
 $minutes = dt::create('2014-5-6 07:04:30')->getDayMinutes();  //424 = 7*60+4
 
-//relative Time to a fixed Unit
-$hours = dt::totalRelTime("1 Week 3 Days 5 Hours","h"); //245
-
 //get Julian Date Number
 $jd = dt::create('2018-06-25 03:38:25 UTC')->toJD();
 
@@ -235,6 +232,48 @@ $isSunday = $dt->is('sun');  //bool(false)
 
 
 ```
+#### Calculations with times and DateIntervals
+
+```php
+//relative Time to a fixed Unit
+$hours = dt::totalRelTime("1 Week 3 Days 5 Hours","h"); //float(245)
+
+//Convert 124 hours and 6 minutes to seconds
+$seconds = dt::totalRelTime("124:06",'seconds');  //float(446760)
+
+//Convert 02:05:30 to minutes
+$minutes = dt::totalRelTime("02:05:30",'minutes');  //float(125.5)
+
+//Convert a DateInterval to seconds
+$dateInterval = new DateInterval('PT2H3S');  //2 hours, 3 s
+$seconds = dt::totalRelTime($dateInterval);  //float(7203)
+
+//Convert float seconds and milliseconds to a DateInterval
+$dateInterval = dt::date_interval_create_from_float(157.25);
+echo $dateInterval->format('%H:%I:%S.%F');  //00:02:37.250000
+
+//formatDateInterval with format character %G for output of hours >= 24
+$dateInterval = DateInterval::createFromDateString('3 Days 4 Hours 6 Minutes');
+echo dt::formatDateInterval('%G:%I', $dateInterval);  //76:06
+
+//Convert seconds to time format H:i:s
+$dateInterval = dt::date_interval_create_from_float(446762);
+echo dt::formatDateInterval('%G:%I:%S', $dateInterval); //124:06:02
+
+//add times
+$times = ['7:35','8:45','10:16','-00:30'];
+$seconds = 0.0;
+foreach($times as $time){
+  $seconds += dt::totalRelTime($time);
+}
+$dateInterval = dt::date_interval_create_from_float($seconds);
+echo dt::formatDateInterval('%r%G:%I:%S', $dateInterval); //26:06:00
+
+$floatHours = dt::totalRelTime($seconds,'hour');
+echo $floatHours.' hours';  //26.1 hours
+
+```
+
 
 #### Example Shophours
 

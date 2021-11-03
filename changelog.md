@@ -1,7 +1,8 @@
 # DateTime Extension dt
 
-## Version 1.95 (2021-10-11)
-* Extend method is 
+## Version 1.95 (2021-11-03)
+* Extend method is
+* Extend method totalRelTime (now accepts negative times) 
 
 ## Version 1.94 (2021-09-23)
 * Added method isWeekday

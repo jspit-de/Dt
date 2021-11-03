@@ -1269,6 +1269,10 @@ $t->start('totalrelTime: hours:minutes:seconds.millisec');
 $seconds = dt::totalRelTime("124:06:01.56"); //default unit seconds
 $t->checkEqual($seconds, 124*3600+6*60+1.56);
 
+$t->start('totalrelTime: float seconds');
+$minutes = dt::totalRelTime(120.0,'min'); //minutes
+$t->checkEqual($minutes, 2.0);
+
 $t->start('totalRelTime: DateInterval-Object with Month to hours');
 $di = new DateInterval('P4M3DT2H');  //4 month + 3 Days + 2 Hours
 $hours = dt::totalRelTime($di,'h',"2016-1-1");
@@ -1295,6 +1299,7 @@ $tests = array(
   "hhh:ii:ss" => array("245:23:15" , 245. * 3600 + 23 * 60 +15),
   "hhh:ii:ss.m" => array("234:45:34.6" , (234 * 60 + 45) * 60 + 34.6),
   "hhh:ii:ss,m" => array("234:45:34,6" , (234 * 60 + 45) * 60 + 34.6),
+  "-hh:ii" => array("-00:30" , -30 * 60),
   "ss" => array("23" , 23.),
   "ss.m" => array("23.25" , 23.25),
   "hh:i" => array("34:8" , 34 * 3600 + 8. * 60),

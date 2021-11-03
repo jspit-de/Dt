@@ -10,7 +10,7 @@ use \DateInterval as DateInterval;
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
 |   Version: 1.95                                                           |
-|      Date: 2021-10-11                                                     |
+|      Date: 2021-11:03                                                     |
 |       PHP: 5.6+                                                           |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014-2021, Peter Junk (alias jspit). All Rights Reserved.     |
@@ -1537,13 +1537,16 @@ class dt extends DateTime{
  /*
   * timeStrToSeconds: Convert a string "ii:ss,ms" to Seconds (Float)
   * @param string time: hhh:ii hhh:ii:ss hhh:ii.ss,m ii:ss.m
+  * >= v1.95 accept negative times
   * return Float or bool false if error
   */
   public static function timeToSeconds($timeString){
-    if(!preg_match('~^(\d+)(:\d{1,2}){0,2}([\.,]\d+)?$~',$timeString)) {
+    $posTimeString = ltrim($timeString,'-');
+    $minus = $posTimeString != (string)$timeString;
+    if(!preg_match('~^(\d+)(:\d{1,2}){0,2}([\.,]\d+)?$~',$posTimeString)) {
       return false; 
     }
-    $splitP = preg_split("~[.,]~",$timeString);
+    $splitP = preg_split("~[.,]~",$posTimeString);
     $splitDp = explode(":",$splitP[0]);
     $seconds = 0.0;
     foreach($splitDp as $val) {
@@ -1557,7 +1560,7 @@ class dt extends DateTime{
       //hh:ii
       $seconds *= 60;
     }
-    return $seconds;
+    return $minus ? -$seconds : $seconds;
   }
 
  /*
