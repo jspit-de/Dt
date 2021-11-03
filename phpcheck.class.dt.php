@@ -1,6 +1,6 @@
 <?php
 
-//last modify: 2021-07-14
+//last modify: 2021-10-12
 error_reporting(-1);
 ini_set('display_errors', 1);
 header('Content-Type: text/html; charset=UTF-8');
@@ -17,10 +17,10 @@ $t->setOutputOnlyErrors(!empty($_GET['error']));
  */
 require '../class/class.dt.php';
 
-//für class.dt.php ab version 1.93
+//für class.dt.php ab version 1.94
 $t->start('check class version');
 $info = $t->getClassVersion("dt");
-$t->check($info, !empty($info) AND $info >= 1.93);
+$t->check($info, !empty($info) AND $info >= 1.95);
 
 $t->start('Check if extension IntlDateFormatter exists');
 $msg = extension_loaded("Intl") 
@@ -741,7 +741,7 @@ $t->start('get count Sundays between 9.9.-1.9.19');
 $result = dt::create('2019-9-9')->countDaysTo('Sun','2019-9-1');
 $t->checkEqual($result, -2);
 
-$t->start('get count the Weekday from Today to +1 week exclude dateTo');
+$t->start('get count the Weekday(current Day) from Today to +1 week exclude dateTo');
 $result = dt::create('Today')->countDaysTo('Today','+1 week', true);
 $t->checkEqual($result, 1);
 
@@ -899,7 +899,7 @@ $t->checkEqual($result, 3);
 
 $t->start('get Date as JD Julian Date Number');
 $result = dt::create('2018-06-25 03:38:25 UTC')->toJD();
-$t->checkEqual($result,2458294.6516782);
+$t->checkEqual($result,2458294.6516782,"",1.E-7);
 
 $t->start('get JD from old date');
 $result = dt::create('1695-11-25 12:00','UTC')->toJD();
@@ -1101,6 +1101,16 @@ $seconds = dt::create('2016-06-03 15:30:45.2')
   ->diffTotal('2016-06-03 15:30:47.4');
 $t->checkEqual($seconds, 2.2,"",1E-10); //Delta for Float
 
+$t->start('diffTotal: Milliseconds');
+$seconds = dt::create('2016-06-03 15:30:45.2')
+  ->diffTotal('2016-06-03 15:30:47.4','Millisecond');
+$t->checkEqual($seconds, 2200.0); 
+
+$t->start('diffTotal: Microseconds');
+$seconds = dt::create('2016-06-03 15:30:45.2')
+  ->diffTotal('2016-06-03 15:30:47.4','Microseconds');
+$t->checkEqual($seconds, 2200000.0); 
+
 $t->start('diffTotal: change winter/summer time');
 $hours = dt::create('2014-03-30 00:00')
   ->diffTotal('2014-03-30 06:00','hour');
@@ -1132,8 +1142,8 @@ $t->start('diffFormat: min:sec.millisec');
 $strDuration = dt::create("08:00:01.500000")->diffFormat("08:12:10.750000","%I:%S.%v");
 $t->checkEqual($strDuration, "12:09.250");
 
-$t->start('diffFormat Weeks %w');
-$weeks = $dt::create('2018-06-01')->diffFormat('2018-06-16','%w');
+$t->start('diffFormat full Weeks %w');
+$weeks = dt::create('2018-06-01')->diffFormat('2018-06-16','%w');  //15 Days
 $t->checkEqual($weeks, "2");
 
 //diffHuman
@@ -1164,6 +1174,10 @@ $t->checkEqual($result, '2 Wochen');
 $t->start('diffHuman: de 6 Monate');
 $result = dt::create('2157-02-01')->diffHuman('2157-08-02 02:05:20','de');
 $t->checkEqual($result, '6 Monate');
+
+$t->start('diffHuman: default parameter now, de');
+$result = dt::create('-4 month -8 days')->diffHuman();
+$t->checkEqual($result, '4 Monate');
 
 $t->start('diffHuman: Age Years de');
 //Age Albrecht Dürer * 21. Mai 1471 † 6. April 1528
@@ -1427,14 +1441,25 @@ $isSummertime = dt::create('Jun 2011','Europe/Moscow')->isSummertime();
 $t->checkEqual($isSummertime, false);
 
 $t->start('toCET (from Summertime)');
-$result = dt::create('2015-05-15 15:00','Europe/Berlin')->toCET();
-$expect = '2015-05-15 14:00:00';
-$t->check((string)$result, (string)$result == $expect);
+$result = dt::create('2015-05-15 15:00','Europe/Berlin')
+  ->toCET()
+  ->format('Y-m-d H:i:s e')
+;
+$expect = '2015-05-15 14:00:00 CET';  //14h
+$t->checkEqual($result, $expect);
 
 $t->start('toCET (Wintertime)');
-$result = dt::create('2015-02-15 15:00','Europe/Berlin')->toCET();
-$expect = '2015-02-15 15:00:00';
-$t->check((string)$result, (string)$result == $expect);
+$result = dt::create('2015-02-15 15:00','Europe/Berlin')
+  ->toCET()
+  ->format('Y-m-d H:i:s e')
+;
+$expect = '2015-02-15 15:00:00 CET';
+$t->checkEqual($result, $expect);
+
+
+/*
+ * is-functions
+ */
 
 $t->start('is 2011 a leap year - no');
 $isLeapYear = dt::create('Jun 2011')->isLeapYear();
@@ -1447,6 +1472,10 @@ $t->checkEqual($isLeapYear, true);
 $t->start('is at 1.May 2016 a weekend - yes');
 $isWeekEnd = dt::create('1 May 2016')->isWeekEnd();
 $t->checkEqual($isWeekEnd, true);
+
+$t->start('is at 1.May 2016 a weekday - no');
+$isWeekDay = dt::create('1 May 2016')->isWeekDay();
+$t->checkEqual($isWeekDay, false);
 
 $t->start('is today in current week - yes');
 $isInWeek = dt::create('today')->isInWeek();
@@ -1471,6 +1500,99 @@ $t->checkEqual($result, true);
 $t->start("Determines if a date is in the past");
 $result = dt::create('-2 Second')->isPast();
 $t->checkEqual($result, true);
+
+$t->start("is('2019')");
+$result = dt::create('2019-06-02 12:23:45')->is('2019');
+$t->checkEqual($result, true);
+
+$t->start("is('2018')");
+$result = dt::create('2019-06-02 12:23:45')->is('2018');
+$t->checkEqual($result, false);
+
+$t->start("is('308')");
+$result = dt::create('308-06-02 12:23:45')->is('308');
+$t->checkEqual($result, true);
+
+$t->start("is('2019-06')");
+$result = dt::create('2019-06-02 12:23:45')->is('2019-06');
+$t->checkEqual($result, true);
+
+$t->start("is('06-02')");
+$result = dt::create('2019-06-02 12:23:45')->is('06-02');
+$t->checkEqual($result, true);
+
+$t->start("is('08-02')");
+$result = dt::create('308-02-25 12:23:45')->is('08-02');
+$t->checkEqual($result, false);
+
+$t->start("is('2019-06-02')");
+$result = dt::create('2019-06-02 12:23:45')->is('2019-06-02');
+$t->checkEqual($result, true);
+
+$t->start("is('Sunday')");
+$result = dt::create('2019-06-02 12:23:45')->is('Sunday');
+$t->checkEqual($result, true);
+
+$t->start("is('sun')");
+$result = dt::create('2019-06-02 12:23:45')->is('sun');
+$t->checkEqual($result, true);
+
+$t->start("is('sat')");
+$result = dt::create('2019-06-02 12:23:45')->is('sat');
+$t->checkEqual($result, false);
+
+$t->start("is('day')");
+$result = dt::create('2019-06-02 12:23:45')->is('day');
+$t->checkEqual($result, false);
+
+$t->start("is('June')");
+$result = dt::create('2019-06-02 12:23:45')->is('June');
+$t->checkEqual($result, true);
+
+$t->start("is('jun')");
+$result = dt::create('2019-06-02 12:23:45')->is('jun');
+$t->checkEqual($result, true);
+
+$t->start("is('12h')");
+$result = dt::create('2019-06-02 12:23:45')->is('12h');
+$t->checkEqual($result, true);
+
+$t->start("is('23h')");
+$result = dt::create('2019-06-02 12:23:45')->is('23h');
+$t->checkEqual($result, false);
+
+$t->start("is('12:23')");
+$result = dt::create('2019-06-02 12:23:45')->is('12:23');
+$t->checkEqual($result, true);
+
+$t->start("is('23:45')");
+$result = dt::create('2019-06-02 12:23:45')->is('23:45');
+$t->checkEqual($result, false);
+
+$t->start("is('12:23:45')");
+$result = dt::create('2019-06-02 12:23:45')->is('12:23:45');
+$t->checkEqual($result, true);
+
+$t->start("is('12:23:45')");
+$result = dt::create('2019-06-02 12:23:45')->is('12:23:00');
+$t->checkEqual($result, false);
+
+$t->start("is('weekend')");
+$result = dt::create('2019-06-02 12:23:45')->is('weekend');
+$t->checkEqual($result, true);
+
+$t->start("is('today')");
+$result = dt::create('Now')->is('today');
+$t->checkEqual($result, true);
+
+$t->start("is('today') -> false");
+$result = dt::create('-24 hours')->is('today');
+$t->checkEqual($result, false);
+
+$t->start("is('yesterday')");
+$result = dt::create('-24 hours')->is('yesterday');
+$t->checkEqual($result, true);
+
 
 //isCron
 $t->start('isCron 00:01: ok');

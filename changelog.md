@@ -1,5 +1,8 @@
 # DateTime Extension dt
 
+## Version 1.95 (2021-10-11)
+* Extend method is 
+
 ## Version 1.94 (2021-09-23)
 * Added method isWeekday
 * Added method is
@@ -7,6 +10,7 @@
 
 ## Version 1.93 (2021-07-07)
 * Redesign property weekOfMonth
+* Redesign method createFromRegExFormat (now accepts negative years)
 
 ## Version 1.91 (2020-12-20)
 * Add week format% w to formatDateInterval and diffFormat
