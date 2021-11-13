@@ -9,8 +9,8 @@ use \DateInterval as DateInterval;
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 1.95                                                           |
-|      Date: 2021-11:03                                                     |
+|   Version: 1.96                                                           |
+|      Date: 2021-11-13                                                     |
 |       PHP: 5.6+                                                           |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014-2021, Peter Junk (alias jspit). All Rights Reserved.     |
@@ -69,6 +69,11 @@ class dt extends DateTime{
     if(is_string($timeZone)) {
       $timeZone = new DateTimeZone($timeZone);
     }
+
+    if(is_string($dt) AND strpos($dt,"@") === 0){
+      //@ at first, process timestamp 
+      $dt = (float)substr($dt,1);
+    }
     
     //DateTime object
     if($dt instanceof DateTime or $dt instanceof DateTimeImmutable) {
@@ -78,7 +83,7 @@ class dt extends DateTime{
       }      
     }
     
-    //null
+    //null ?
     elseif($dt === null) {
       parent::__construct("now", $timeZone);
     }
@@ -581,12 +586,18 @@ class dt extends DateTime{
         AND stripos($language,"gregorian") === false)
         ? IntlDateFormatter::TRADITIONAL
         : IntlDateFormatter::GREGORIAN;
+
+      $curTz = $this->getTimezone();
+      if($curTz->getName() === 'Z'){
+        //INTL don't know Z
+        $curTz = new DateTimeZone('UTC');
+      }
         
       if($formatContainIntlConst) {
         $fmt = datefmt_create( $language ,
           constant("IntlDateFormatter::".$matchIntl[1]), 
           constant("IntlDateFormatter::".$matchIntl[2]),
-          $this->getTimezone(),
+          $curTz,
           $calType);
         $strDate = datefmt_format( $fmt ,$this);
       }
@@ -594,7 +605,7 @@ class dt extends DateTime{
         $fmt = datefmt_create( $language ,
           IntlDateFormatter::FULL, 
           IntlDateFormatter::FULL,
-          $this->getTimezone(),
+          $curTz,
           $calType,
           $format);
         $strDate = datefmt_format( $fmt ,$this);
@@ -615,9 +626,8 @@ class dt extends DateTime{
             '{#3}' => 'MMM',
             '{#4}' => 'MMMM',
           ));
-
           $fmt = datefmt_create( $language ,IntlDateFormatter::FULL, IntlDateFormatter::FULL,
-            $this->getTimezone(),$calType ,$IntlFormat);
+          $curTz,$calType ,$IntlFormat);
           $replace = $fmt ? datefmt_format( $fmt ,$this) : "???";
           $strDate = str_replace($match[0], $replace, $strDate);
         }
