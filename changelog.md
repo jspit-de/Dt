@@ -1,4 +1,13 @@
-# DateTime Extension dt
+# DateTime Extension Dt
+
+## Version 2.0 (2022-08-23)
+* Add Namespace
+* Added method isLastDayOfMonth
+* Added method isCurrent
+* Added method isTimeBetween
+* Extend method totalRelTime, now also accept expressions like '2d13m30s'
+* 'AND' can be used in chains instead of the character '|' 
+* PHP >= 7.0 is required
 
 ## Version 1.95 (2021-11-03)
 * Extend method is
