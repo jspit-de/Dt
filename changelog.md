@@ -5,6 +5,7 @@
 * Added method isLastDayOfMonth
 * Added method isCurrent
 * Added method isTimeBetween
+* Added method addDays
 * Extend method totalRelTime, now also accept expressions like '2d13m30s'
 * 'AND' can be used in chains instead of the character '|' 
 * PHP >= 7.0 is required

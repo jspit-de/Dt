@@ -14,7 +14,7 @@ use \DateInterval as DateInterval;
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
 |   Version: 2.0                                                            |
-|      Date: 2022-08-23                                                     |
+|      Date: 2022-09-07                                                     |
 |       PHP: 7.0                                                            |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014-2022, Peter Junk (alias jspit). All Rights Reserved.     |
@@ -814,7 +814,7 @@ class Dt extends DateTime{
  /*
   * set Date to first Day of Passover
   * 1600-1-1 < date < 2100-1-1
-  * throw exeption if error
+  * throw Exception if error
   */
   public function setPassoverDate(){
     $year = (int)parent::format('Y');
@@ -922,7 +922,7 @@ class Dt extends DateTime{
 
  /*
   * is('datestring')
-  * @param string $partialDateString
+  * @param string $partialDateString(|$partialDateString)..
   * @return bool
   */
   public function is($partialDateString){
@@ -938,26 +938,14 @@ class Dt extends DateTime{
       '/^\d\d:\d\d$/' => 'H:i',
       '/^\d\d:\d\d:\d\d$/' => 'H:i:s'
     ];
-
-    foreach($regExFmt as $regEx => $fmt){
-      if(preg_match($regEx, (string)$partialDateString, $match)){
-        if($fmt === 'function'){
-          $fct = 'is'.$partialDateString;
-          return $this->$fct();
-        }
-        $strDate = parent::format($fmt);
-        if(isset($match['int'])) {
-          return (int)$match['int'] === (int) $strDate;
-        }
-        return stripos($strDate,$partialDateString) === 0;
+    foreach(explode('|',$partialDateString) as $pStr){
+      $ret = $this->_is(trim($pStr),$regExFmt);
+      if($ret === true) return true;
+      elseif($ret !== false){
+        throw new LogicException("Unknown Parameter '$partialDateString' ");
       }
     }
-    // check if rel date how today, yesterday, tomorrow
-    $refDate = date_create($partialDateString);
-    if(is_object($refDate)){
-      return $refDate->format("Y-m-d") === parent::format("Y-m-d");
-    }
-    throw new LogicException("Unknown Parameter '$partialDateString' ");
+    return false;
   }
 
  /*
@@ -1468,33 +1456,13 @@ class Dt extends DateTime{
   * $return int, bool false if error
   */
   public function countDaysTo($dayIdentList, $dateTo, $excludeDateTo = false) {
-    $dayIdentList = strtolower($dayIdentList);
-    if($dayIdentList !== 'all' AND $dayIdentList !== "") {
-      $weekDays = explode(",",$dayIdentList);
-      foreach($weekDays as &$dayIdent) {
-        $dayIdent = trim($dayIdent);
-        if(is_numeric($dayIdent)) {
-          $dayIdent = (int)$dayIdent;
-        }
-        elseif(is_string($dayIdent)) {
-          $wDate = date_create($dayIdent);
-          $dayIdent = $wDate ? (int)($wDate->format('w')) : false;
-        }
-        else {
-          $dayIdent = false;
-        }
-        if($dayIdent < 0 or $dayIdent > 6 or $dayIdent === false) {
-          trigger_error(
-            'Error Method '.__METHOD__.', invalid Parameter $dayIdent in '. self::backtraceFileLine(),
-            E_USER_WARNING
-          );
-          return false;
-        }
-      }
-    }
-    else {
-      //all days of week
-      $weekDays = [0,1,2,3,4,5,6];
+    $weekDays = $this->parseDayIdentList($dayIdentList);
+    if($weekDays === false) {
+      trigger_error(
+        'Error Method '.__METHOD__.', invalid Parameter $dayIdent in '. self::backtraceFileLine(),
+        E_USER_WARNING
+      );
+      return false;
     }
     $start = $this->copy()->setTime(0,0,0);
     $dateTo = self::create($dateTo);
@@ -1936,6 +1904,33 @@ class Dt extends DateTime{
     else {
       throw new Exception('Parameter for '.__METHOD__.' is not Int or Float');
       return false;
+    }
+    return $this;
+  }
+
+ /*
+  * Adds daynumber days to the date. 
+  * Only the days of the week that are in $dayIdentList are counted.
+  *
+  * @param $dayNumber > 0 
+  * @param mixed $dayIdentList (int 0=Sun .. 6 =Sat or string 'Sun','Mon'..'Sat'
+  *  or rel.DateString or DateString or a comma separated list
+  *  null or 'all' is a short for '0,1,2,3,4,5,6'
+  * @param $filter  optional filter function
+  * $return $this
+  */
+  function addDays($dayNumber,$dayIdentList = "all",$filter = ""){
+    $weekDays = $this->parseDayIdentList($dayIdentList);
+    if($weekDays === false) {
+      throw new Exception('Error Method '.__METHOD__.', invalid Parameter $dayIdentList in '. self::backtraceFileLine());
+    }
+    $filterExists = is_callable($filter);
+    while($dayNumber > 0){
+      $this->modify('+1 Day');
+      
+      if(in_array($this->format('w'),$weekDays) AND (!$filterExists OR $filter($this))){
+        --$dayNumber;
+      }
     }
     return $this;
   }
@@ -2574,6 +2569,59 @@ class Dt extends DateTime{
       },
       $pattern
     );
+  }
+
+  //return true, false or null if error
+  private function _is($partialDateString,$regExFmt){
+    foreach($regExFmt as $regEx => $fmt){
+      if(preg_match($regEx, (string)$partialDateString, $match)){
+        if($fmt === 'function'){
+          $fct = 'is'.$partialDateString;
+          return $this->$fct();
+        }
+        $strDate = parent::format($fmt);
+        if(isset($match['int'])) {
+          return (int)$match['int'] === (int) $strDate;
+        }
+        return stripos($strDate,$partialDateString) === 0;
+      }
+    }
+    // check if rel date how today, yesterday, tomorrow
+    $refDate = date_create($partialDateString);
+    if(is_object($refDate)){
+      return $refDate->format("Y-m-d") === parent::format("Y-m-d");
+    }
+    return NULL;
+  }
+
+
+  //return array with int or false if error
+  protected function parseDayIdentList($dayIdentList){
+    $dayIdentList = strtolower($dayIdentList);
+    if($dayIdentList !== 'all') {
+      $weekDays = explode(",",$dayIdentList);
+      foreach($weekDays as &$dayIdent) {
+        $dayIdent = trim($dayIdent);
+        if(is_numeric($dayIdent)) {
+          $dayIdent = (int)$dayIdent;
+        }
+        elseif($dayIdent !== "") {
+          $wDate = date_create($dayIdent);
+          $dayIdent = $wDate ? (int)($wDate->format('w')) : false;
+        }
+        else {
+          $dayIdent = false;
+        }
+        if($dayIdent < 0 or $dayIdent > 6 or $dayIdent === false) {
+          return false;
+        }
+      }
+    }
+    else {
+      //all days of week
+      $weekDays = [0,1,2,3,4,5,6];
+    }
+    return $weekDays;
   }
   
  /*

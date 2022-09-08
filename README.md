@@ -132,6 +132,9 @@ $date = Dt::create('2015-2-16 01:30:00')->addTime('5:30');  //2015-02-16 07:00:0
 //adds a number of months and cut supernumerary
 $date = Dt::create('2015-1-31 01:30:00')->addMonthCut(1);  //2015-02-28 01:30:00
 
+//Add 2 days, from Sunday 2022-09-04 only count Mondays
+$date = Dt::create('2022-09-04')->addDays(2,'Mon');  //Mon, 2022-09-12
+
 //cut a interval
 $date15min = Dt::create('2013-12-18 03:55:07')->cut('15 Minutes'); //2013-12-18 03:45:00
 $date2h = Dt::create('2013-12-18 03:55:07')->cut('2 hours'); //2013-12-18 02:00:00
@@ -341,11 +344,11 @@ echo $date.' : '.($open ? 'Open' : 'Close');
 
 ### Documentation
 
-http://jspit.de/tools/classdoc.php?class=dt
+http://jspit.de/tools/classdoc.php?class=Jspit\Dt
 
 ### Demo and Test
 
-http://jspit.de/check/phpcheck.class.dt.php
+http://jspit.de/check/phpcheck.jspit.dt.php
 
 ### Requirements
 

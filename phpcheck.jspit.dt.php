@@ -1,12 +1,12 @@
 <?php
-//last modify: 2022-06-15
+//last modify: 2022-09-07
 use Jspit\Dt;
 
 error_reporting(-1);
 ini_set('display_errors', 1);
 header('Content-Type: text/html; charset=UTF-8');
 
-require __DIR__.'/../class/Phpcheck.php';
+require __DIR__.'/../class/phpcheck.php';
 require __DIR__.'/../class/class.debug.php';
 
 $t = new PHPcheck();  //need min 1.3.17   
@@ -1333,6 +1333,78 @@ $expected = "2019-08-06 10:57:48.824232";
 $dateTime = Dt::create("1601-1-1 UTC")->addSeconds($ts/1000000);
 $t->checkEqual($dateTime->toStringWithMicro(), $expected);
 
+//add Days
+$t->start('addDays: add 1 Monday');
+$start = '2022-09-04 13:45'; //Sunday
+$date = Dt::create($start)->addDays(1,'Mon');
+$t->checkEqual($date->format('D, d.m.Y H:i'),'Mon, 05.09.2022 13:45');
+
+$t->start('addDays: add 2 Mondays');
+$start = '2022-09-04'; //Sunday
+$date = Dt::create($start)->addDays(2,'Mon');
+$t->checkEqual($date->format('D, d.m.Y'),'Mon, 12.09.2022');
+
+$t->start('addDays: add 2 Days, Monday and Friday');
+$start = '2022-09-04'; //Sunday
+$date = Dt::create($start)->addDays(2,'Mon,Fri');
+$t->checkEqual($date->format('D, d.m.Y'),'Fri, 09.09.2022');
+
+$t->start('addDays: add 3 Days, Monday and Friday');
+$start = '2022-09-04'; //Sunday
+$date = Dt::create($start)->addDays(3,'Mon,Fri');
+$t->checkEqual($date->format('D, d.m.Y'),'Mon, 12.09.2022');
+
+$t->start('addDays: add 1 Monday');
+$start = '2022-09-05'; //Monday
+$date = Dt::create($start)->addDays(1,'Mon');
+$t->checkEqual($date->format('D, d.m.Y'),'Mon, 12.09.2022');
+
+$t->start('addDays: add 30 Days, exclude Sunday');
+$start = '2022-09-04'; //Sunday
+$date = Dt::create($start)->addDays(30,'1,2,3,4,5,6'); //0=Sun
+$t->checkEqual($date->format('D, d.m.Y'),'Sat, 08.10.2022');
+
+$t->start('addDays: add 30 Days, exclude Sunday');
+$start = '2022-09-05'; //Monday
+$date = Dt::create($start)->addDays(30,'1,2,3,4,5,6');  //0=Sun
+$t->checkEqual($date->format('D, d.m.Y'),'Mon, 10.10.2022');
+
+$t->start('addDays: from Sun next Mon,Tue,Thu or Fri');
+$start = '2022-09-04'; //Sunday
+$date = Dt::create($start)->addDays(1,'1,2,4,5');  
+$t->checkEqual($date->format('D, d.m.Y'),'Mon, 05.09.2022');
+
+$t->start('addDays: from Mon next Mon,Tue,Thu or Fri');
+$start = '2022-09-05'; //Monday
+$date = Dt::create($start)->addDays(1,'1,2,4,5');  
+$t->checkEqual($date->format('D, d.m.Y'),'Tue, 06.09.2022');
+
+$t->start('addDays: from Tue next Mon,Tue,Thu or Fri');
+$start = '2022-09-06'; //Tue
+$date = Dt::create($start)->addDays(1,'1,2,4,5');  
+$t->checkEqual($date->format('D, d.m.Y'),'Thu, 08.09.2022');
+
+$t->start('add 0 Days return always startdate');
+$start = '2022-09-06'; //Tue
+$date = Dt::create($start)->addDays(0,'Sat');  
+$t->checkEqual($date->format('D, d.m.Y'),'Tue, 06.09.2022');
+
+$t->start('add Days with filter');
+$start = '2020-12-31'; //Thu
+//filter for not New Year's Day
+$filter = function($dt){return !$dt->is('01-01');};
+//Only Weekdays Mo-Fr and not 01-01 
+$date = Dt::create($start)->addDays(1,'1,2,3,4,5',$filter); 
+//2021-01-01 Fri, 2021-01-02 Sat, 2021-01-03 Sun
+$t->checkEqual($date->format('D, d.m.Y'),'Mon, 04.01.2021');
+
+$t->start('addDays: Throw Exeption for invalid argument type');
+$closure = function(){
+  $dt = Dt::create()->addDays(5,'Mon,Tus'); //invalid arg
+};
+$t->checkException($closure, "Exception");
+
+//addTime
 $t->start('addTime: add 01:05:30');
 $date = Dt::create("2015-03-31 12:00")->addTime('01:05:30');
 $t->checkEqual((string)$date, "2015-03-31 13:05:30");
@@ -1659,6 +1731,10 @@ $t->checkEqual($result, true);
 $t->start("is('2018')");
 $result = Dt::create('2019-06-02 12:23:45')->is('2018');
 $t->checkEqual($result, false);
+
+$t->start("is('2018|2019') = is('2018) or is('2019')");
+$result = Dt::create('2019-06-02 12:23:45')->is('2018|2019');
+$t->checkEqual($result, true);
 
 $t->start("is('308')");
 $result = Dt::create('308-06-02 12:23:45')->is('308');
