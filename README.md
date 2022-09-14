@@ -352,5 +352,5 @@ http://jspit.de/check/phpcheck.jspit.dt.php
 
 ### Requirements
 
-- PHP 7.0+
+- PHP 7.x
 - IntlDateFormatter class for full language support
