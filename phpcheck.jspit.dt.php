@@ -1,5 +1,5 @@
 <?php
-//last modify: 2022-09-07
+//last modify: 2022-09-13
 use Jspit\Dt;
 
 error_reporting(-1);
@@ -154,8 +154,8 @@ $expected = '2015-12-25 00:00:02.500000';
 $t->checkEqual($date->formatL('Y-m-d H:i:s.u'), $expected);
 
 $t->start('Create Date from a big Float Timestamp with Milliseconds');
-$date = Dt::create(35573107125.25);
-$expected = '3097-04-07 19:38:45.250000';
+$date = Dt::create(35570432325.25);
+$expected = '3097-03-07 20:38:45.250000';
 $t->checkEqual($date->formatL('Y-m-d H:i:s.u'), $expected);
 
 $t->start('Create Date from Millisecond Timestamp');
@@ -596,8 +596,8 @@ Dt::setDefaultLanguage('et');  //estnisch
 $str = '26/Veebr/2005/13:45'; 
 $regEx = '~(?<d>\d{1,2})/(?<M>\w+)/(?<Y>\d{4,4})/(?<H>\d{1,2}):(?<i>\d{1,2})~'; 
 $date = Dt::createFromRegExFormat($regEx,$str);
-$result = $date ? $date->formatL('l, d.F Y H:i') : "Error";
-$expected = "laupäev, 26.veebruar 2005 13:45";
+$result = $date ? $date->formatL('d.F Y H:i') : "Error";
+$expected = "26.veebruar 2005 13:45";
 $t->checkEqual($result, $expected);
 
 //set default for checks
@@ -1548,8 +1548,8 @@ $timeStamp = Dt::create('1716-12-24','UTC')->getMicroTime();
 $t->checkEqual($timeStamp, -7984569600.);
 
 $t->start('get a Timestamp after 2038');
-$timeStamp = Dt::create('2065-06-12')->getMicroTime();
-$t->checkEqual($timeStamp, 3011986800.);
+$timeStamp = Dt::create('2065-03-12')->getMicroTime();
+$t->checkEqual($timeStamp, 3004038000.);
 
 $t->start('get a Float-Timestamp with fractions of seconds');
 $timeStamp = Dt::create('2006-06-12 13:45:56.25')->getMicroTime();
@@ -1562,16 +1562,16 @@ $eps = 1/(24*60*60*1000);  //1 ms
 $t->checkEqual($msTimestamp, 5273.573058518562,"",$eps); 
 
 $t->start('create Date from the Timestamp');
-$date = Dt::create(3011986800);
-$t->checkEqual((string)$date ,'2065-06-12 00:00:00');
+$date = Dt::create(3004038000);
+$t->checkEqual((string)$date ,'2065-03-12 00:00:00');
 
 $t->start('set Timestamp');
-$date = Dt::create()->setTimestamp(3011986800);
-$t->checkEqual((string)$date,'2065-06-12 00:00:00');
+$date = Dt::create()->setTimestamp(3004038000);
+$t->checkEqual((string)$date,'2065-03-12 00:00:00');
 
 $t->start('set Float-Timestamp with Milliseconds');
-$date = Dt::create()->setTimestamp(3011986800.12);
-$t->checkEqual($date->formatL('Y-m-d H:i:s.u'),'2065-06-12 00:00:00.120000');
+$date = Dt::create()->setTimestamp(3004038000.12);
+$t->checkEqual($date->formatL('Y-m-d H:i:s.u'),'2065-03-12 00:00:00.120000');
 
 //easter
 $t->start('create Easter-Date for year 1775');
@@ -1600,21 +1600,26 @@ $t->checkEqual((string)$easterDate, '1626-04-19 00:00:00');
 $t->start('sunrise at 24 sep 2020 Berlin');
 $location = [52.520008, 13.404954]; //lat lon Berlin
 $dt = Dt::create('24 sep 2020')->setSunrise($location);
-$t->checkEqual((string)$dt, '2020-09-24 06:56:32');
+$diffMinute = $dt->diffTotal('2020-09-24 06:56:32','Minutes');
+$t->check((string)$dt, abs($diffMinute) < 2);
 
 $t->start('sunset at 24 sep 2020 Berlin');
 $dt = Dt::create('24 sep 2020')->setSunset(52.520008, 13.404954);
-$t->checkEqual((string)$dt, '2020-09-24 18:59:56');
+$diffMinute = $dt->diffTotal('2020-09-24 18:59:56','Minutes');
+$t->check((string)$dt, abs($diffMinute) < 2);
 
 $t->start('sunset at 24 sep 2020 Cologne');
 $location = [50.937932, 6.953777];
 $dt = Dt::create('24 sep 2020')->setSunset($location);
-$t->checkEqual((string)$dt, '2020-09-24 19:25:43');
+$diffMinute = $dt->diffTotal('2020-09-24 19:25:43','Minutes');
+$t->check((string)$dt, abs($diffMinute) < 2);
 
 $t->start('sunset at 24 sep 2020, location from timezone');
 $dt = Dt::create('24 sep 2020','Europe/Berlin')->setSunset();
-$t->checkEqual((string)$dt, '2020-09-24 19:00:05');
+$diffMinute = $dt->diffTotal('2020-09-24 19:00:05','Minutes');
+$t->check((string)$dt, abs($diffMinute) < 2);
 
+//
 $t->start('get date to first day of Passover 2018');
 $passoverDate2018 = Dt::Passover(2018);
 $t->checkEqual((string)$passoverDate2018, '2018-03-31 00:00:00');

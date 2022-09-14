@@ -151,12 +151,6 @@ $firstAdvent = Dt::create('2017-1-1')->chain('12/25|last Sunday|-3 weeks');
 //modify with chain Spring Bank Holiday 2016 (United Kingdom)
 $date = Dt::create('2016-1-1')->chain('Last monday of May {{year}}');  //2016-05-30
 
-//Sunset Berlin Today
-$location = [52.520008, 13.404954]; //lat lon Berlin
-$dt = Dt::create('today')->setSunset($location);
-//Local time Sunrise tomorrow in New York
-$dt = Dt::create('tomorrow','America/New_York')->setSunrise();
-
 //chain with conditions : if it is after 12:00, take next working day at 8:00
 $date = Dt::create('2018-09-24 10:30')->chain('{{?Hi>1200}}next weekday 8:00');  
 //2018-09-24 10:30:00  
@@ -352,5 +346,5 @@ http://jspit.de/check/phpcheck.jspit.dt.php
 
 ### Requirements
 
-- PHP 7.x
+- PHP 7.x, PHP 8.0, PHP 8.1
 - IntlDateFormatter class for full language support
