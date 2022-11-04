@@ -6,7 +6,6 @@ use \DateTime as DateTime;
 use \DateTimeZone as DateTimeZone;
 use \Exception as Exception;
 use \LogicException as LogicException;
-use \InvalidArgumentException as InvalidArgumentException;
 use \IntlDateFormatter as IntlDateFormatter;
 use \IntlCalendar as IntlCalendar;
 use \DateInterval as DateInterval;
@@ -15,7 +14,7 @@ use \DateInterval as DateInterval;
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
 |   Version: 2.0                                                            |
-|      Date: 2022-09-14                                                     |
+|      Date: 2022-11-04                                                     |
 |       PHP: 7.0                                                            |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014-2022, Peter Junk (alias jspit). All Rights Reserved.     |
@@ -256,7 +255,7 @@ class Dt extends DateTime{
     $dateStr = '';
     $format = '';
     foreach($dateArr as $formatEl => $value) {
-      if(ctype_alpha((string)$formatEl)) {
+      if(ctype_alpha($formatEl)) {
         $format .= $formatEl.' ';
         if($formatEl == 'F' OR $formatEl == 'M'){  //text Month
           $value = self::translateMonth($value);  
@@ -737,7 +736,7 @@ class Dt extends DateTime{
       $minute = ($minute !== null) ? (int)$minute : 0;
     }
     if (version_compare(PHP_VERSION, '7.1.0') >= 0) {
-      parent::setTime($hour, $minute, $seconds, (int)$microseconds);
+      parent::setTime($hour, $minute, $seconds, $microseconds);
     }
     else {
       parent::setTime($hour, $minute, $seconds);
@@ -826,31 +825,26 @@ class Dt extends DateTime{
     return parent::modify($modifier);
   }
 
-   /*
-  * get Sun Ifo of date
-  * @param $lat array [$lat, $lon] or float latitude 
-  * @param $lon float Longitude
-  * @return array 
-  */
-  public function getSunInfo($lat = null, $lon = null): array {
-    if(is_array($lat)){
-      list($lat,$lon) = array_merge(array_values($lat),[null,null]);  
-    }
-    $location = $this->getTimezone()->getLocation();
-    $lat = $lat ?: $location["latitude"];
-    $lon = $lon ?: $location["longitude"];
-    return date_sun_info($this->getTimeStamp(),$lat,$lon);
-  }
-
  /*
   * set Time to sunset of this Day
   * @param $lat array [$lat, $lon, $zenith] or float latitude 
   * @param $lon float Longitude
   * @param $zenith float zenith
   */
-  public function setSunset($lat = null, $lon = null){
-    $info = $this->getSunInfo($lat,$lon);
-    return $this->setTimeStamp($info['sunset']);
+  public function setSunset($lat = null, $lon = null, $zenith = null){
+    if(is_array($lat)){
+      list($lat,$lon,$zenith) = array_merge(array_values($lat),[null,null,null]);  
+    }
+    $location = $this->getTimezone()->getLocation();
+    $tsSunset = date_sunset(
+      $this->getTimeStamp(),
+      SUNFUNCS_RET_TIMESTAMP,
+      $lat ?: $location["latitude"],
+      $lon ?: $location["longitude"],
+      $zenith ?: ini_get('date.sunset_zenith')
+    );
+    $this->setTimeStamp($tsSunset);
+    return $this;
   }
 
  /*
@@ -859,11 +853,23 @@ class Dt extends DateTime{
   * @param $lon float Longitude
   * @param $zenith float zenith
   */
-  public function setSunrise($lat = null, $lon = null){
-    $info = $this->getSunInfo($lat,$lon);
-    return $this->setTimeStamp($info['sunrise']);
-  }  
+  public function setSunrise($lat = null, $lon = null, $zenith = null){
+    if(is_array($lat)){
+      list($lat,$lon,$zenith) = array_merge(array_values($lat),[null,null,null]);  
+    }
+    $location = $this->getTimezone()->getLocation();
+    $tsSunrise = date_sunrise(
+      $this->getTimeStamp(),
+      SUNFUNCS_RET_TIMESTAMP,
+      $lat ?: $location["latitude"],
+      $lon ?: $location["longitude"],
+      $zenith ?: ini_get('date.sunrise_zenith')   
+    );
+    $this->setTimeStamp($tsSunrise);
+    return $this;
+  }
 
+  
  /*
   * setTimezone(string Timezone), convert date in new Timezone
   * Dt::create('24.12.2013 18:00')->setTimezone('America/New_York'); //12:00 America/New_York
@@ -881,6 +887,8 @@ class Dt extends DateTime{
       
     return $this;  
   }
+  
+  
   
  /*
   * return true if Summertime
@@ -1258,7 +1266,7 @@ class Dt extends DateTime{
   * return DateInterval object
   * diff accept as parameter object, string or timestamp 
   */
-  public function diff($date = null, $absolute = false): DateInterval {
+  public function diff($date = null, $absolute = false) {
     if($date instanceof \DateTime) {
       return parent::diff($date, $absolute);
     }
@@ -1274,7 +1282,6 @@ class Dt extends DateTime{
   * for Year and Month return full Years or Month (integer)
   */
   public function diffTotal($date=null, $unitP = "sec") {
-
     $refDate = self::create($date,parent::getTimezone());
     if($refDate === false) {
       trigger_error('First Parameter for '.__METHOD__.' is not a valid Date', E_USER_WARNING);
@@ -1306,10 +1313,12 @@ class Dt extends DateTime{
       elseif($unit == $unitList['m']){
         //$month = $diff->y * 12 + $diff->m;
         //return $diff->invert ? -$month : $month;
+        $refDate->setTimezone(parent::getTimezone());
         list($yearStart,$monthStart,$dayStart) = explode(" ",$this->format("Y m dHis"));
         list($yearEnd,$monthEnd, $dayEnd) = explode(" ",$refDate->format("Y m dHis"));
         $mothDiff = ($yearEnd - $yearStart) * 12 + $monthEnd - $monthStart;
-        if($dayStart > $dayEnd) --$mothDiff;
+        if($refDate > $this && $dayStart > $dayEnd) --$mothDiff;
+        elseif($refDate < $this && $dayStart < $dayEnd) ++$mothDiff;
         return $mothDiff;
       }
       else {
@@ -1724,7 +1733,7 @@ class Dt extends DateTime{
   * $microSeconds (Integer) : microSeconds
   */
   public function setMicroSeconds($microSeconds){
-    $micro = (int)((int)$microSeconds%1000000);
+    $micro = (int)($microSeconds%1000000);
     $strDateTime = $this->format('Y-m-d H:i:s');
     parent::__construct($strDateTime.'.'.sprintf('%06d',$micro),parent::getTimezone());
     return $this;
@@ -1815,9 +1824,8 @@ class Dt extends DateTime{
   */  
   public function setTimestamp($unixtimestamp): self
   {
-    if(!is_numeric($unixtimestamp)) {
-      throw new InvalidArgumentException('Parameter for '.__METHOD__.' is not a valid timestamp');
-    }
+    if(!is_numeric($unixtimestamp)) return false;
+
     $timeZone = parent::getTimezone();
     $this->setTimestampUTC($unixtimestamp);
     parent::setTimezone($timeZone);
@@ -1868,11 +1876,11 @@ class Dt extends DateTime{
   * accept also DateInterval, but DateTime::sub is better
   */  
   public function subTime($timeInterval) {
-    $seconds = self::totalRelTime($timeInterval);
+    $seconds = -self::totalRelTime($timeInterval);
     if($seconds === false) {
       throw new Exception('Parameter for '.__METHOD__.' is not a valid time');
     }
-    return $this->addSeconds(-$seconds);
+    return $this->addSeconds($seconds);
   }
 
  /*
@@ -1895,7 +1903,8 @@ class Dt extends DateTime{
       $this->modify(sprintf('%+.0f',$fullSeconds).' Seconds');
     }
     else {
-      throw new InvalidArgumentException('Parameter for '.__METHOD__.' is not Int or Float');
+      throw new Exception('Parameter for '.__METHOD__.' is not Int or Float');
+      return false;
     }
     return $this;
   }
@@ -2504,7 +2513,7 @@ class Dt extends DateTime{
   * $flag : Dt::EASTER_WEST or Dt::EASTER_EAST
   * return dt object or false if error
   */
-  public static function modifyToEaster(Dt $dt, $year, $flag = self::EASTER_WEST) {
+  public static function modifyToEaster(dt $dt, $year, $flag = self::EASTER_WEST) {
     if($year < 1600 or $year >= 2100){
       return false;
     }
