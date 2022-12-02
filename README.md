@@ -351,4 +351,5 @@ http://jspit.de/check/phpcheck.jspit.dt.php
 ### Requirements
 
 - PHP 7.x, PHP 8.0, PHP 8.1
+- Multibyte String Functions
 - IntlDateFormatter class for full language support

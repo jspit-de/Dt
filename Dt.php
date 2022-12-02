@@ -946,8 +946,9 @@ class Dt extends DateTime{
 
  /*
   * isSameAs($dateFormat, $dateTime)
-  * compare this->format($dateFormat) with now($dateFormat)
+  * compare this->format($dateFormat) with $dateTime->format($dateFormat)
   * @param string $dateFormat
+  * @param mixed $dateTime: string, dt-object, DateTime-Object, int- or int-Timestamp
   * @return bool 
   */
   public function isSameAs($dateFormat = 'YmdHis', $dt = 'Now'){
