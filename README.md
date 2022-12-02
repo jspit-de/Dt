@@ -1,4 +1,4 @@
-# dt 
+# Dt 
 
 PHP extension for DateTime API.
 
@@ -257,6 +257,10 @@ $isPast = $dt->is('past');  //bool(true)
 $isToday = $dt->is('today');  //bool(false)
 $isFuture = $dt->is('future');  //bool(false)
 $isSunday = $dt->is('sun');  //bool(false)
+
+//isSameAs
+$myDay = '2021-06-07 12:00';
+$isSameDay = $dt->isSameAs('Ymd', $myDay); //true
 
 //isCurrent
 $born = Dt::create('1991-08-25');
