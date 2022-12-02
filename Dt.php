@@ -14,8 +14,8 @@ use \DateInterval as DateInterval;
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 2.0                                                            |
-|      Date: 2022-11-05                                                     |
+|   Version: 2.1                                                            |
+|      Date: 2022-12-02                                                     |
 |       PHP: >= 7.0                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014-2022, Peter Junk (alias jspit). All Rights Reserved.     |
@@ -24,7 +24,7 @@ use \DateInterval as DateInterval;
 
 class Dt extends DateTime{
   
-  const VERSION = '2.0';
+  const VERSION = '2.1';
   const EN_PHP = 'en_php';
   const EN = 'en';
   const DE = 'de';
@@ -945,6 +945,18 @@ class Dt extends DateTime{
   }
 
  /*
+  * isSameAs($dateFormat, $dateTime)
+  * compare this->format($dateFormat) with now($dateFormat)
+  * @param string $dateFormat
+  * @return bool 
+  */
+  public function isSameAs($dateFormat = 'YmdHis', $dt = 'Now'){
+    $thisFormat = str_replace('t','d',$dateFormat);
+    $strNowFmt = self::create($dt,$this->getTimeZone())->format($dateFormat);
+    return parent::format($thisFormat) === $strNowFmt;
+  }
+
+ /*
   * isCurrent($dateFormat)
   * compare this->format($dateFormat) with now($dateFormat)
   * @param string $dateFormat
@@ -1398,7 +1410,7 @@ class Dt extends DateTime{
         $unit = $units['m'];
       }
     }
-    return sprintf('%.0f %s',(int)$diff,$unit);
+    return sprintf('%.0F %s',(int)$diff,$unit);
   }
   
  /*
@@ -1576,7 +1588,7 @@ class Dt extends DateTime{
     }
     if(is_float($relTime) OR is_int($relTime)){
       $fullSeconds = floor($relTime);
-      $relTime = "00:00:0".sprintf("%0.6f",$relTime-$fullSeconds)." +".$fullSeconds." Seconds";
+      $relTime = "00:00:0".sprintf("%0.6F",$relTime-$fullSeconds)." +".$fullSeconds." Seconds";
       return $dateBasis->diffTotal($basis.' '.$relTime, $unit);
     }
     if(is_string($relTime)) {
@@ -1588,7 +1600,7 @@ class Dt extends DateTime{
           return false;          
         }
         $fullSeconds = floor($seconds);
-        $relTime = "00:00:0".sprintf("%0.6f",$seconds-$fullSeconds)." +".$fullSeconds." Seconds";
+        $relTime = "00:00:0".sprintf("%0.6F",$seconds-$fullSeconds)." +".$fullSeconds." Seconds";
       }
       else {
         $replacements = [
@@ -1666,7 +1678,7 @@ class Dt extends DateTime{
     $unit = reset($match);
     $faktor = array_search($unit,$units);
     $seconds = $absValue * $faktor;
-    $fraction = sprintf('%0.6f', fmod($seconds,1));
+    $fraction = sprintf('%0.6F', fmod($seconds,1));
     $ref = date_create('2000-1-1 00:00:0'.$fraction.' UTC')->modify(floor($seconds).' Seconds');
     $base = date_create('2000-1-1 UTC');
     return $timeValue < 0.0 ? $ref->diff($base) : $base->diff($ref);
@@ -1896,7 +1908,7 @@ class Dt extends DateTime{
       if($secFragment >= 0.000001) {
         $this->setMicroSeconds($secFragment * 1000000);
       }
-      $this->modify(sprintf('%+.0f',$fullSeconds).' Seconds');
+      $this->modify(sprintf('%+.0F',$fullSeconds).' Seconds');
     }
     else {
       throw new InvalidArgumentException('Parameter for '.__METHOD__.' is not Int or Float');
@@ -2352,10 +2364,10 @@ class Dt extends DateTime{
   private function setTimestampUTC($unixtimestamp){
     $seconds = floor($unixtimestamp);
     $secondsFraktion = $unixtimestamp - $seconds;
-    $basis = '1970-01-01 00:00:0'.sprintf('%0.6f',$secondsFraktion);
+    $basis = '1970-01-01 00:00:0'.sprintf('%0.6F',$secondsFraktion);
     
     parent::__construct($basis, new DateTimeZone('UTC'));
-    parent::modify(sprintf('%+.0f',(float)$seconds).' Seconds');
+    parent::modify(sprintf('%+.0F',(float)$seconds).' Seconds');
     
     return $this;
   }
@@ -2407,7 +2419,8 @@ class Dt extends DateTime{
   //Dt::translateMonth("3. Mai 1985") -> ""3. May 1985""
   //return string if ok, otherwise false
   public static function translateMonth($strDate){
-    $month = array_slice(self::$mon_days[self::$defaultLanguage],0,12);  //only month
+    $curLanguage = self::$defaultLanguage === self::EN ? self::EN_PHP : self::$defaultLanguage;
+    $month = array_slice(self::$mon_days[$curLanguage],0,12);  //only month
     if(str_ireplace($month,'',$strDate) !== $strDate) {
       //full Month
       return str_ireplace($month, self::$mon_days[self::EN_PHP],$strDate);
