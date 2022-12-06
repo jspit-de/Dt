@@ -1,5 +1,9 @@
 # DateTime Extension Dt
 
+## Version 2.1 (2022-12-02)
+* Add method isSameAs
+* Bugfix with certain setlocale settings 
+
 ## Version 2.0 (2022-09-14)
 * Add Namespace
 * Added method isLastDayOfMonth
