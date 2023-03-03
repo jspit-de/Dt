@@ -1,13 +1,19 @@
 <?php
-//last modify: 2022-09-13
+//last modify: 2023-02-07
 use Jspit\Dt;
 
-error_reporting(-1);
+//error_reporting(-1);
+error_reporting(E_ALL ^ (E_WARNING | E_USER_WARNING));
 ini_set('display_errors', 1);
 header('Content-Type: text/html; charset=UTF-8');
 
+
+//setlocale(LC_ALL, "german.UTF8");  //win
+
 require __DIR__.'/../class/phpcheck.php';
 require __DIR__.'/../class/class.debug.php';
+//if check with macros
+require __DIR__.'/../class/Macro.php';
 
 $t = new PHPcheck();  //need min 1.3.17   
 //call with ?error=1 print only errors
@@ -19,10 +25,12 @@ $t->setOutputOnlyErrors(!empty($_GET['error']));
 $classFile =  __DIR__.'/../class/Jspit/Dt.php';
 require $classFile;
 
+$useMacros = array_key_exists('Macro',class_uses(new Dt,false));
+
 //für class.dt.php ab version 1.97
 $t->start('check class version');
 $info = $t->getClassVersion(Dt::class);
-$t->check($info, !empty($info) AND $info >= 2.0);
+$t->check($info, !empty($info) AND $info >= 2.2);
 
 $t->start('get hash of file');
 $result = hash_file('crc32',$classFile);
@@ -41,16 +49,15 @@ $t->checkEqual($msg,'ok');
 
 $t->start('set default Timezone and Language');
 Dt::default_timezone_set('Europe/Berlin');
-$result =Dt::setDefaultLanguage('de');
+$result = Dt::setDefaultLanguage('en');
 $t->checkEqual($result,true);
 
 $t->start('get default Language');
 $result =Dt::getDefaultLanguage();
-$t->checkEqual($result,'de');
+$t->checkEqual($result,'en');
 
 //create
 $t->start('Create current Time (Now)');
-// create dates
 $dt = Dt::create('now');
 $ok = $dt->format('Y-m-d H:i:s') == date_create('now')->format('Y-m-d H:i:s');
 $t->check($dt, $ok);
@@ -69,6 +76,8 @@ $date = Dt::create('6.11.1875 04:09');
 $t->checkEqual((string)$date, '1875-11-06 04:09:00');
 
 $t->start('Create a fix Date dd.mm.yy');
+// German language required for this
+Dt::setDefaultLanguage('de');
 $date = Dt::create('5.6.15');
 $t->checkEqual((string)$date, '2015-06-05 00:00:00');
 
@@ -101,6 +110,7 @@ $date = Dt::create('4.März 2016');
 $t->checkEqual((string)$date, '2016-03-04 00:00:00');
 
 $t->start('Create Date from year and Week-Number');
+Dt::setDefaultLanguage('en');
 $date = Dt::create('2015W50');
 $t->checkEqual((string)$date, '2015-12-07 00:00:00');
 
@@ -314,7 +324,7 @@ $dt = Dt::createDtFromFormat('!Y*m*d*',$input);
 $t->checkEqual((string)$dt, "2008-11-13 00:00:00");
 
 //reset DefaultLanguage
-Dt::setDefaultLanguage('de');
+Dt::setDefaultLanguage('en');
 
 if(extension_loaded("Intl")) {
 
@@ -356,13 +366,20 @@ $date = Dt::createFromJD($jdNumber,"UTC");
 $arr = cal_from_jd($jdNumber,CAL_GREGORIAN);
 $t->check($date->format('Y-m-d'), $arr['date'] === $date->format('n/j/Y'));
 
-$t->start('crate from Microsoft Excel Timestamp');
+$t->start('crate from Microsoft Excel Timestamp (days since Dec 31 1899)');
 $date = Dt::createFromMsTimestamp(43317.54,"UTC");
 $t->checkEqual((string)$date, "2018-08-05 12:57:36");
 
 $t->start('crate from Microsoft Excel Timestamp with Milliseconds');
 $date = Dt::createFromMsTimestamp(5273.57305851856,"UTC");
 $expected = "1914-06-08 13:45:12.256000";
+$t->checkEqual($date->toStringWithMicro(), $expected);
+
+$t->start('crate from Microsoft Excel string timestamp with comma');
+//$strNumber = cell('10.09.2022') + cell('10:12:13,250') 
+$strNumber = '44814,4251533565';
+$date = Dt::createFromMsTimestamp($strNumber,"UTC");
+$expected = "2022-09-10 10:12:13.250000";
 $t->checkEqual($date->toStringWithMicro(), $expected);
 
 //createFromSystemTime
@@ -400,6 +417,17 @@ $timeStamp = 43850.428414352;
 $date = Dt::createFromSystemTime($timeStamp,'Dec 30 1899','1 Day',"UTC");
 $expected = "2020-01-20 10:16:55";
 $t->checkEqual((string)$date, $expected);
+
+$t->start('create dt from Epoche Day: days since 1970-01-01');
+$epocheDay = 18740.25;
+$date = Dt::createFromSystemTime($epocheDay,'1970-01-01',86400,"UTC");
+$expected = "2021-04-23 06:00:00";
+$t->checkEqual((string)$date, $expected);
+
+$t->start('calculate Epoche Day from Dt');
+$dt = Dt::create('2021-04-23 12:00:00','UTC');
+$epocheDay = Dt::create('1970-01-01','UTC')->diffTotal($dt,'Days');
+$t->checkEqual($epocheDay, 18740.5);
 
 $t->start('convert c# DateTime.ToBinary() to DateTime');
 $numFromCsharp = -8586307756854775808;  //2 bit kind + 62 bit ticks
@@ -443,7 +471,7 @@ $date = Dt::create('31.02.2015');
 $t->checkEqual($date, false);
 
 $t->start('Create Date with regular Expressions');
-$str = '24 Dezember';
+$str = '24 December';
 $regEx = '~(?<d>\d{1,2}) (?<F>\w+)~';
 $dateTemplate = "1.1.2010 18:00";
 $date = Dt::createFromRegExFormat($regEx,$str,null,$dateTemplate);
@@ -495,8 +523,7 @@ $t->checkEqual($dt,false);
 
 //formatL
 $t->start('format with German short Weekday');
-// format dates 
-$strDate = Dt::create('2014-12-20')->formatL('D, d.m.Y');
+$strDate = Dt::create('2014-12-20')->formatL('D, d.m.Y','de');
 $t->checkEqual($strDate,'Sam, 20.12.2014');
 
 $t->start('format with English short Weekday');
@@ -505,7 +532,8 @@ $t->checkEqual($strDate,'Sat, 20.12.2014');
 
 if(extension_loaded("Intl")){ //with IntlDateFormatter
   
-$t->start('IntlDateFormatter exists: language "fr"');  
+$t->start('IntlDateFormatter exists: language "fr"');
+Dt::setDefaultLanguage('en');  
 $strDate = Dt::create('14.1.2015')->formatL('l, d F Y','fr');  
 $t->checkEqual($strDate,'mercredi, 14 janvier 2015');
 
@@ -601,7 +629,7 @@ $expected = "26.veebruar 2005 13:45";
 $t->checkEqual($result, $expected);
 
 //set default for checks
-Dt::setDefaultLanguage('de');
+Dt::setDefaultLanguage('en');
 //end checke with IntlDateFormatter
 }
 else {
@@ -1188,29 +1216,31 @@ $hours = Dt::create('2003-10-1 0:00')->diffTotal('2003-10-4 12:00',"hours");
 $t->checkEqual($hours, (float)(84));
 
 $t->start('diffTotal: Minutes');
-$hours = Dt::create('2003-10-1 0:00')->diffTotal('2003-10-4 12:00',"Minutes");
+$hours = Dt::create('2003-10-01 0:00')->diffTotal('2003-10-04 12:00',"Minutes");
 $t->checkEqual($hours, (float)(84*60));
 
-$t->start('diffTotal: full Years');
-$years = Dt::create('1950-10-1 0:00')->diffTotal('2003-11-4 12:00',"Years");
-$t->checkEqual($years, 53);
+$t->start('diffTotal: float Years');
+$years = Dt::create('1950-10-01')->diffTotal('2003-11-04',"Years");
+$expected = (2003-1950) + (31+3)/365.25;  //Year-Diff + Rest Days/365.25
+$t->checkEqual($years, $expected);
 
-$t->start('diffTotal: full Month');
-$month = Dt::create('1950-10-1 0:00')->diffTotal('2003-11-4 12:00',"Month");
-$t->checkEqual($month, 53*12+1);
+$t->start('diffTotal: float Month');
+$month = Dt::create('1950-10-1 0:00')->diffTotal('2003-11-16',"Month");
+$t->checkEqual($month, 53*12+1.5);
 
-$t->start('diffTotal: full Month');
+$t->start('diffTotal: float Month');
 $month = Dt::create('2018-01-01')->diffTotal('2018-03-01',"Month");
-$t->checkEqual($month, 2);
+$t->checkEqual($month, 2.0);
 
-$t->start('diffTotal: full Month');
-$month = Dt::create('2017-12-31')->diffTotal('2019-03-02',"Month");
-$t->checkEqual($month, 14);
+$t->start('diffTotal: float Month negative');
+$month = Dt::create('2022-07-01')->diffTotal('2022-04-16',"Month");
+$t->checkEqual($month, -2.5);
 
-$t->start('diffTotal: full Month');
-$month = Dt::create('2018-02-15 12:00:01')
-  ->diffTotal('2018-03-15 12:00:00',"Month");
-$t->checkEqual($month, 0);
+$t->start('diffTotal: float Month');
+$month = Dt::create('2018-02-01 00:00:01')
+  ->diffTotal('2018-03-01 00:00:00',"Month");
+// diff = 1 month - 1 Second = 
+$t->check($month, $month < 1 AND $month > 0.9999);
 
 $t->start('diffTotal: Seconds');
 $seconds = Dt::create('1950-10-1 0:00')->diffTotal('2033-11-4 12:00');
@@ -1295,12 +1325,13 @@ $t->start('diffHuman: de 6 Monate');
 $result = Dt::create('2157-02-01')->diffHuman('2157-08-02 02:05:20','de');
 $t->checkEqual($result, '6 Monate');
 
-$t->start('diffHuman: default parameter now, de');
+$t->start('diffHuman: default parameter now, en');
 $result = Dt::create('-4 month -8 days')->diffHuman();
-$t->checkEqual($result, '4 Monate');
+$t->checkEqual($result, '4 Months');
 
 $t->start('diffHuman: Age Years de');
 //Age Albrecht Dürer * 21. Mai 1471 † 6. April 1528
+Dt::setDefaultLanguage('de');
 $result = Dt::create('21. Mai 1471')->diffHuman('6. April 1528','de');
 $t->checkEqual($result, '56 Jahre');
 
@@ -1315,6 +1346,7 @@ $t->checkEqual($result, '-6 Tage');
 
 //diffUTC
 $t->start('diffUTC: change winter/summer time');
+Dt::setDefaultLanguage('en');
 $hours = Dt::create('2014-03-30 00:00')->diffUTC('2014-03-30 06:00','hour');
 $t->checkEqual($hours, 5.0);
 
@@ -1827,6 +1859,54 @@ $t->start("is('yesterday')");
 $result = Dt::create('-24 hours')->is('yesterday');
 $t->checkEqual($result, true);
 
+//isSameAs
+$t->start('isSameAs("Ymd",$dt2) = is same day');
+$dt = Dt::create('2020-05-16 17:02:59');
+$dt2 = Dt::create('2020-05-16 03:17:02');
+$result = $dt->isSameAs('Ymd',$dt2);
+$t->checkEqual($result, true);
+
+$t->start('isSameAs("Ymd",$dt2) = is not same day');
+$dt = Dt::create('2020-05-16 17:02:59');
+$dt2 ='2020-05-17 03:17:02';
+$result = $dt->isSameAs('Ymd',$dt2);
+$t->checkEqual($result, false);
+
+$t->start('isSameAs: is same day and same hour -> no');
+$dt = Dt::create('2020-05-16 17:02:59');
+$dt2 = Dt::create('2020-05-16 03:17:02');
+$result = $dt->isSameAs('YmdH',$dt2);
+$t->checkEqual($result, false);
+
+$t->start('isSameAs: is same day and same hour -> yes');
+$dt = Dt::create('2020-05-16 17:02:59');
+$dt2 = Dt::create('2020-05-16 17:17:02');
+$result = $dt->isSameAs('YmdH',$dt2);
+$t->checkEqual($result, true);
+
+$t->start('isSameAs: dates are in the same week');
+//or use isInWeek
+$dt = Dt::create('2020-05-16 17:02:01');  //Saturday
+$result = $dt->isSameAs('o-W',"2020-05-11");  //Monday
+$t->checkEqual($result, true);
+
+$t->start('isSameAs: dates are not in the same week');
+$dt = Dt::create('2020-05-16 17:02:01');  //Saturday
+$result = $dt->isSameAs('o-W',"2020-05-10");  //Sunday before
+$t->checkEqual($result, false);
+
+$t->start('isSameAs: YmdHi different Timezones -> yes') ;
+$dt = Dt::create('2020-05-16 17:02:01','Europe/Berlin'); 
+$dt2 = Dt::create('2020-05-16 11:02:24','America/New_York'); 
+$result = $dt->isSameAs('YmdHi',$dt2);
+$t->checkEqual($result, true);
+
+$t->start("exception parameter datetime is wrong");
+$closure = function() {
+  $result = Dt::create('Now')->isSameAs('Y','invalid date');
+};
+$t->checkException($closure);
+
 //isCurrent
 $t->start('isCurrent("YmdHi") Minute');
 $result = Dt::create('now')->iscurrent("YmdHi");
@@ -1854,6 +1934,17 @@ $t->start('isCurrent("Ymt") - last Day of Month');
 $dt = Dt::create('{{Y-m}}-27'); //27 never last day of month
 $result = Dt::create('{{Y-m}}-27')->isCurrent('Ymt');
 $t->checkEqual($result, false);
+
+//isCmp
+$t->start('isCmp - compare with format-mask');
+$dt = Dt::create('2020-05-11 17:02:01');
+$result = $dt->isCmp('>','10:00:00','His');
+$t->checkEqual($result, true);
+
+$t->start('isCmp - compare with format-mask');
+$dt = Dt::create('2020-05-11 17:02:01');
+$result = $dt->isCmp('<','18:00:00','His');
+$t->checkEqual($result, true);
 
 //isTimeBetween
 $t->start("isTimeBetween('08:00','22:00') for Now");
@@ -1979,7 +2070,7 @@ $t->checkEqual((string)$date, '2018-09-19 00:00:00');
 
 $t->start('chain: 1. advent this Year');
 $date = Dt::create('today')->chain('12/25|last Sunday|-3 weeks');
-$expect = Dt::create('26.11')->modify('next sunday');
+$expect = Dt::create('26 Nov')->modify('next sunday');
 $t->checkEqual((string)$date, (string)$expect);
 
 $t->start('chain: 4. advent 2017');
@@ -2155,6 +2246,44 @@ $dateInterval = date_create('2000-01-01 00:00:06.125000')
   ->diff(date_create('2000-1-1'));
 $result = Dt::formatDateInterval('%R%S,%v', $dateInterval);
 $t->checkEqual($result, "-06,125");
+
+//macros
+$t->start('use Macros');
+$t->check($useMacros, true);
+if($useMacros){
+$t->start('macro: name,closure');
+Dt::macro('startOfNextMonth',function(){return $this->modify('first Day of next month 00:00');});
+$dt = Dt::create('2021-03-15')
+  ->startOfNextMonth()
+  ->setTime('13:45');
+$t->checkEqual((string)$dt, "2021-04-01 13:45:00");
+
+$t->start('macro: [name => closure]');
+$macros = [
+  'advent' => function($number){
+    return $this->modify('Nov 26')
+      ->modify('next Sunday')
+      ->modify(--$number.' weeks');
+  }
+];
+Dt::macro($macros); //register macros
+$advent = Dt::create('2022-01-01')
+  ->advent(4)
+  ->format('Y-m-d');
+$t->checkEqual($advent, "2022-12-18");
+
+$t->start('use macro advent');
+$dt = Dt::create('2022-01-01')->advent(3);
+$t->checkEqual((string)$dt, "2022-12-11 00:00:00");
+
+$t->start('macro with self::');
+Dt::macro('createFromTimeStamp',function($timestamp){
+  return self::create((float)$timestamp);
+});
+$ts = strtotime('2022-01-01');
+$dt = Dt::createFromTimeStamp($ts);
+$t->checkEqual((string)$dt, "2022-01-01 00:00:00");
+}
 
 /*
  * End Tests 
