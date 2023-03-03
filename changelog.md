@@ -1,5 +1,10 @@
 # DateTime Extension Dt
 
+## Version 2.3 (2023-03-03)
+* Fixes for PHP 8.2
+* diffTotal result is float for units year and month
+* optional integration of macros
+
 ## Version 2.1 (2022-12-02)
 * Add method isSameAs
 * Bugfix with certain setlocale settings 

@@ -14,17 +14,19 @@ use \DateInterval as DateInterval;
 /**
 .---------------------------------------------------------------------------.
 |  class dt a DateTime extension class                                      |
-|   Version: 2.1                                                            |
-|      Date: 2022-12-02                                                     |
+|   Version: 2.3                                                            |
+|      Date: 2023-03-03                                                     |
 |       PHP: >= 7.0                                                         |
 | ------------------------------------------------------------------------- |
 | Copyright © 2014-2022, Peter Junk (alias jspit). All Rights Reserved.     |
-' ------------------------------------------------------------------------- '
+'---------------------------------------------------------------------------'
 */
 
-class Dt extends DateTime{
+final class Dt extends DateTime{
+  //Uncomment the next line if you need macros
+  //use \Macro;
   
-  const VERSION = '2.1';
+  const VERSION = '2.3';
   const EN_PHP = 'en_php';
   const EN = 'en';
   const DE = 'de';
@@ -59,7 +61,7 @@ class Dt extends DateTime{
   );
   
   protected static $strictModeCreate = false;
-  
+
   //protected $propContainer = null;
   private $errorInfo = "";
     
@@ -275,7 +277,7 @@ class Dt extends DateTime{
       return false;
     }
     //strict 
-    if(self::$strictModeCreate AND $lastErrors['warning_count'] > 0){
+    if(self::$strictModeCreate && $lastErrors && $lastErrors['warning_count'] > 0){
       $errMsg = implode(', ',$lastErrors['warnings']);
       trigger_error(
         $errMsg.'. Method '.__METHOD__.', Message: invalid Date String in '. self::backtraceFileLine(),
@@ -610,8 +612,8 @@ class Dt extends DateTime{
       }
       if(preg_match('/[DM]/',$format)) {
         $strDate = str_replace(
-          array_map(array('self','substr3'),self::$mon_days[self::EN_PHP]),
-          array_map(array('self','substr3'),self::$mon_days[$language]),
+          array_map(self::class.'::substr3',self::$mon_days[self::EN_PHP]),
+          array_map(self::class.'::substr3',self::$mon_days[$language]),
           $strDate);
       }
     }
@@ -951,10 +953,35 @@ class Dt extends DateTime{
   * @param mixed $dateTime: string, dt-object, DateTime-Object, int- or int-Timestamp
   * @return bool 
   */
-  public function isSameAs($dateFormat = 'YmdHis', $dt = 'Now'){
+  public function isSameAs(string $dateFormat = 'YmdHis', $dt = 'Now'){
+    $dtObj = self::create($dt,$this->getTimeZone());
+    if(!$dtObj) {
+      throw new Exception("invalid date '".$dt."' for ".__METHOD__); 
+    } 
     $thisFormat = str_replace('t','d',$dateFormat);
-    $strNowFmt = self::create($dt,$this->getTimeZone())->format($dateFormat);
+    $strNowFmt = $dtObj->format($dateFormat);
     return parent::format($thisFormat) === $strNowFmt;
+  }
+
+ /*
+  * compare this->format($dateFormat) with $dt->format($dateFormat) use operator $op
+  * @param string $op: =,!=,<,>,<=,>=
+  * @param mixed $dt: string, dt-object, DateTime-Object, int- or int-Timestamp
+  * @param string $dateFormatMask: any datetime format specification, def. 'YmdHisu'
+  * @return bool 
+  * @throws Exception if invalid $op
+  */
+  public function isCmp(string $op, $dt, string $dateFormatMask = 'YmdHisu') {
+    $dtObj = self::create($dt,$this->getTimeZone());
+    if(!$dtObj) {
+      throw new Exception("invalid date '".$dt."' for ".__METHOD__); 
+    } 
+    $strDtFmt = $dtObj->format($dateFormatMask);
+    $thisFmt = parent::format($dateFormatMask);
+    $result = $this->dynCmp($thisFmt, $op, $strDtFmt);
+    if($result !== NULL) return $result;
+    //Error
+    throw new Exception("invalid comparison operator '".$op."' for ".__METHOD__); 
   }
 
  /*
@@ -983,8 +1010,8 @@ class Dt extends DateTime{
   * return true/false or null if error
   */  
   public function isInWeek($dateWeek = null) {
-    $strDateWeek = self::create($dateWeek)->format('o-W');
-    if($strDateWeek) return $strDateWeek === $this->format('o-W');
+    $dtWeek = self::create($dateWeek);
+    if($dtWeek) return $this->isSameAs('o-W',$dtWeek);
     return null;
   } 
 
@@ -1061,8 +1088,10 @@ class Dt extends DateTime{
   * return int age = diff in years from date to now
   */
   public function age($timeToZero = false) {
-    if(!$timeToZero) return $this->diff()->y;
-    return $this->copy()->setTime(0)->diff()->y;
+    $diff = $this->diff();
+    $minus = $diff->invert ? -1 : 1;
+    if(!$timeToZero) return $minus * $diff->y;
+    return $minus * $this->copy()->setTime(0)->diff()->y;
   }
 
   
@@ -1290,7 +1319,7 @@ class Dt extends DateTime{
   * $unit: Week, Day, Hour, Minute, Second, Year, Month
   * for Year and Month return full Years or Month (integer)
   */
-  public function diffTotal($date=null, $unitP = "sec") {
+  public function diffTotal($date=null, $unitP = "sec",$monthDependWeighting = false) {
 
     $refDate = self::create($date,parent::getTimezone());
     if($refDate === false) {
@@ -1315,19 +1344,34 @@ class Dt extends DateTime{
       else {
         $unit = array_pop($match);
       }
-
-      
-      if($unit == $unitList['y']) {
-        return $diff->invert ? -$diff->y : $diff->y;
+      if($unit == $unitList['y']) { //years
+        $minus = (bool)$diff->invert;
+        $days = (clone $this)
+          ->modify($diff->y.' years')
+          ->diff($refDate)
+          ->days;
+        $floatYears = $diff->y + $days/365.25;
+        return $diff->invert ? -$floatYears : $floatYears;
       }
       elseif($unit == $unitList['m']){
-        $refDate->setTimezone(parent::getTimezone());
-        list($yearStart,$monthStart,$dayStart) = explode(" ",$this->format("Y m dHis"));
-        list($yearEnd,$monthEnd, $dayEnd) = explode(" ",$refDate->format("Y m dHis"));
-        $mothDiff = ($yearEnd - $yearStart) * 12 + $monthEnd - $monthStart;
-        if($refDate > $this && $dayStart > $dayEnd) --$mothDiff;
-        elseif($refDate < $this && $dayStart < $dayEnd) ++$mothDiff;
-        return $mothDiff;
+        $fMonth = ($refDate->format('Y') - $this->format('Y')) * 12;
+        $fMonth += ($refDate->format('m') - $this->format('m'));
+        $tsThis = $this->getTimeStamp();
+        $tsThis1 = (clone $this)
+          ->modify('first day of this month 00:00')
+          ->getTimeStamp();
+        $fracThis = $tsThis - $tsThis1;
+        $monthSecThis = $this->format('t') * 86400;
+        $tsRef = $refDate->getTimeStamp();
+        $tsRef1 = $refDate
+          ->modify('first day of this month 00:00')
+          ->getTimeStamp();
+        $fracRef = $tsRef - $tsRef1;
+        $monthSecRef = $refDate->format('t') * 86400;
+        if($monthDependWeighting === false && $fracThis > 0 && $fracRef > 0){
+          $monthSecRef = $monthSecThis = 0.5 * ($monthSecRef + $monthSecThis);
+        }
+        return (float)$fMonth - $fracThis/$monthSecThis + $fracRef/$monthSecRef;
       }
       else {
         $total = $diff->days;
@@ -1670,7 +1714,7 @@ class Dt extends DateTime{
       604800 => "weeks",
     );
     $match = preg_grep('/^'.$unitP.'/i',$units);
-    if(! is_array($match)) {
+    if(! is_array($match) or empty($match)) {
       trigger_error('Second Parameter for '.__METHOD__.' is not a valid Unit', E_USER_WARNING);
       return false;
     }
@@ -2223,11 +2267,9 @@ class Dt extends DateTime{
   * (w) warning, (e) error
   */
   public static function getLastErrorsAsString() {
-  
     $errInfo = self::getLastErrors();
-    
     $errInfoStr = "";
-    if( $errInfo['warning_count']+$errInfo['error_count'] > 0 ) {
+    if($errInfo && $errInfo['warning_count']+$errInfo['error_count'] > 0 ) {
       $errors = array_map(function($p){return $p.'(e)';},$errInfo['errors']);
       $warnings = array_map(function($p){return $p.'(w)';},$errInfo['warnings']);
       $errInfoStr = implode(',',array_merge($errors,$warnings));
@@ -2311,7 +2353,6 @@ class Dt extends DateTime{
   {
     return array('date', 'timezone_type', 'timezone');
   }
-
 
   
  /*
@@ -2427,8 +2468,8 @@ class Dt extends DateTime{
       return str_ireplace($month, self::$mon_days[self::EN_PHP],$strDate);
     }
     //check short Month
-    $shortMonth = array_map(array('self','substr3'),$month);
-    $shortMonthEN = array_map(array('self','substr3'),self::$mon_days[self::EN_PHP]);
+    $shortMonth = array_map(self::class.'::substr3',$month);
+    $shortMonthEN = array_map(self::class.'::substr3',self::$mon_days[self::EN_PHP]);
     foreach($shortMonth as $key => $curMon){
       if(preg_match('~\b'.$curMon.'\p{L}*~iu',$strDate,$match)){
         return str_replace($match[0],$shortMonthEN[$key], $strDate);
@@ -2604,6 +2645,19 @@ class Dt extends DateTime{
     return NULL;
   }
 
+  //compare var1 and var2 with dynamic operator in string $op
+  private function dynCmp($var1,string $op, $var2){
+    switch ($op) {
+      case "=":  return $var1 == $var2;
+      case ">":  return $var1 >  $var2;
+      case "<":  return $var1 <  $var2;
+      case "!=": return $var1 != $var2;
+      case ">=": return $var1 >= $var2;
+      case "<=": return $var1 <= $var2;
+      case "==": return $var1 == $var2;
+      default:   return null;
+    }
+  }
 
   //return array with int or false if error
   protected function parseDayIdentList($dayIdentList){
