@@ -342,7 +342,7 @@ echo $date.' : '.($open ? 'Open' : 'Close');
 
 ### Documentation
 
-http://jspit.de/tools/classdoc.php?class=Jspit\Dt
+http://jspit.de/tools/classdoc.php?class=Jspit%5CDt
 
 ### Demo and Test
 
